@@ -2,32 +2,72 @@
  * TypeScript types matching the Supabase Postgres schema.
  *
  * These are database-layer types — snake_case to match column names exactly.
- * App-layer/component types in /types/index.ts use camelCase.
+ * Application/grading-layer types in lib/grading.ts use camelCase.
  *
+ * ──────────────────────────────────────────────────────
  * TIMESTAMP MODEL
- *   test_performed_at — when the physical test occurred on the device (client-
- *                       supplied). Correct even for offline-queued tests. Used
- *                       on rejection slips, audit trail, and dispute views.
- *   created_at        — when the row arrived at the database (server-stamped,
- *                       DEFAULT now()). Cannot be backdated by the client.
+ *   test_performed_at  — when the physical test occurred on the device
+ *                        (client-supplied). Correct for offline-queued tests.
+ *                        Used on rejection slips, audit trail, and dispute views.
+ *   created_at         — when the row arrived at the database (server-stamped,
+ *                        DEFAULT now()). Cannot be backdated by the client.
+ *
+ * TEMPERATURE UNITS
+ *   The `temperature` column stores the value in CELSIUS.
+ *   In the application layer the field is named `temperatureC` to make the
+ *   unit explicit. The mapping between the two names is in mapToDbInsert()
+ *   in lib/grading.ts.
  *
  * IMMUTABILITY
  *   Update is typed as `never` for can_tests and corrections to make it
  *   impossible to accidentally build update queries against these tables.
+ *
+ * REASON CODES
+ *   DbReasonCode  — codes that are safe to persist to Postgres.
+ *   The grading engine (lib/grading.ts) also produces INVALID_* reason codes
+ *   for missing/malformed inputs. Those must never be persisted; they are
+ *   typed separately as InvalidReadingReasonCode in lib/grading.ts.
+ * ──────────────────────────────────────────────────────
  */
 
-// ─── Enums ───────────────────────────────────────────────────────────────────
+// ─── Decision ─────────────────────────────────────────────────────────────────
 
 export type CanDecision = 'accepted' | 'rejected'
 
-export type ReasonCode =
+// ─── Reason Codes ─────────────────────────────────────────────────────────────
+
+/**
+ * Reason codes that can be stored in the `reason_codes` column of can_tests.
+ * This is the canonical persistable set — it does NOT include INVALID_* codes.
+ *
+ * INVALID_* codes are defensive codes emitted by the grading engine when inputs
+ * are missing or malformed. They must be resolved (operator re-tests) before
+ * the entry is persisted. They are typed as InvalidReadingReasonCode in
+ * lib/grading.ts and are intentionally excluded from this database type.
+ */
+export type DbReasonCode =
   | 'LOW_FAT'
   | 'LOW_SNF'
   | 'HIGH_TEMPERATURE'
   | 'ADULTERATION_DETECTED'
   | 'OPERATOR_OVERRIDE'
 
-// sync_status is client-side (IndexedDB) metadata only — not stored in Postgres.
+/**
+ * @deprecated Use DbReasonCode for database types.
+ * Use GradingReasonCode (from lib/grading.ts) for grading engine outputs.
+ *
+ * This alias exists for backward compatibility with existing imports of
+ * ReasonCode from this module and will be removed in a future cleanup.
+ */
+export type ReasonCode = DbReasonCode
+
+// ─── Sync Status (client-side only, not stored in Postgres) ──────────────────
+
+/**
+ * Tracks the offline-queue state of a can test entry on the client.
+ * This type is NOT stored in the Postgres database — it lives only in
+ * IndexedDB (via idb-keyval) on the device.
+ */
 export type SyncStatus = 'pending' | 'synced' | 'failed'
 
 // ─── Operators ───────────────────────────────────────────────────────────────
@@ -74,10 +114,16 @@ export interface CanTestRow {
   can_volume: number
   fat_percent: number
   snf_percent: number
+  /**
+   * Temperature of the milk sample in CELSIUS.
+   * Column name is unit-agnostic; the application-layer field is named
+   * `temperatureC` (see CanTestAppEntry in lib/grading.ts) for clarity.
+   */
   temperature: number
   adulteration_result: boolean
   decision: CanDecision
-  reason_codes: ReasonCode[]
+  /** Persistable reason codes only. Must not contain INVALID_* values. */
+  reason_codes: DbReasonCode[]
   is_override: boolean
   override_reason: string | null
   reference_code: string
@@ -95,10 +141,12 @@ export interface CanTestInsert {
   can_volume: number
   fat_percent: number
   snf_percent: number
+  /** Temperature in CELSIUS. Maps from app-layer field `temperatureC`. */
   temperature: number
   adulteration_result: boolean
   decision: CanDecision
-  reason_codes?: ReasonCode[]
+  /** Must NOT contain INVALID_* codes — validate before calling. */
+  reason_codes?: DbReasonCode[]
   is_override?: boolean
   override_reason?: string | null
   reference_code: string

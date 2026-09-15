@@ -6,7 +6,7 @@
  */
 
 import { get, set, del, keys } from 'idb-keyval'
-import type { CanTestEntry } from '@/types'
+import type { CanTestEntry } from '@/types/index'
 
 const QUEUE_PREFIX = 'offline-queue:'
 

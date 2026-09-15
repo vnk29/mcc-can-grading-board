@@ -1,47 +1,47 @@
 /**
- * Shared TypeScript types for the Can Grading Board.
+ * Shared application-layer TypeScript types for the Can Grading Board.
  *
- * These types are used across the app, Supabase schema, and offline queue.
+ * These types are camelCase and used by UI components, the offline queue,
+ * and the grading engine. Database-layer types (snake_case) live in
+ * /types/database.ts and are only used at the Supabase boundary.
  */
 
-// ─── Identifiers ─────────────────────────────────────────────────────────────
+// ─── Re-export canonical types from their authoritative sources ───────────────
 
-export type Decision = 'ACCEPT' | 'REJECT'
+// The canonical decision type lives in database.ts because the database schema
+// defines the allowed values ('accepted' | 'rejected'). Re-exported here for
+// convenience so other modules don't need two imports.
+export type { CanDecision as Decision, DbReasonCode as ReasonCode, SyncStatus } from '@/types/database'
 
-export type ReasonCode =
-  | 'LOW_FAT'
-  | 'LOW_SNF'
-  | 'HIGH_TEMPERATURE'
-  | 'ADULTERATION_DETECTED'
-  | 'OPERATOR_OVERRIDE'
+// ─── Test Values (application layer, camelCase) ───────────────────────────────
 
-export type SyncStatus = 'PENDING' | 'SYNCED' | 'FAILED'
-
-// ─── Test Values ──────────────────────────────────────────────────────────────
-
+/**
+ * Quality readings from a single can test.
+ * All fields are camelCase. Temperature is CELSIUS — named with C suffix.
+ *
+ * This is the application-layer shape. The database layer stores these
+ * in snake_case columns (see CanTestRow in /types/database.ts).
+ */
 export interface TestValues {
   fatPercent: number
   snfPercent: number
-  temperatureCelsius: number
+  /**
+   * Temperature of the milk sample in CELSIUS.
+   * Named with C suffix to make the unit explicit at every call site.
+   */
+  temperatureC: number
   adulterationPositive: boolean
 }
 
 // ─── Grading Thresholds ───────────────────────────────────────────────────────
 
+/** Configurable quality thresholds for a chilling centre. */
 export interface GradingThresholds {
   minFatPercent: number
   minSnfPercent: number
-  maxTemperatureCelsius: number
+  /** Maximum acceptable temperature in CELSIUS. */
+  maxTemperatureC: number
   adulterationAllowed: boolean
-}
-
-// ─── Grading Result ───────────────────────────────────────────────────────────
-
-export interface GradingResult {
-  decision: Decision
-  reasons: ReasonCode[]
-  borderlineFlags: ReasonCode[]
-  isBorderline: boolean
 }
 
 // ─── Core Domain ──────────────────────────────────────────────────────────────
@@ -49,6 +49,7 @@ export interface GradingResult {
 export interface Farmer {
   id: string
   name: string
+  phone?: string
   villageName?: string
 }
 
@@ -57,41 +58,54 @@ export interface Operator {
   name: string
 }
 
+/**
+ * A complete can test entry as held in the application / IndexedDB queue.
+ * Uses camelCase throughout. Converted to CanTestInsert (snake_case) by
+ * mapToDbInsert() in lib/grading.ts before being sent to Supabase.
+ */
 export interface CanTestEntry {
-  /** UUID, generated client-side for idempotent offline sync */
+  /** UUID generated client-side for idempotent offline sync. */
   id: string
-
-  /** Immutable timestamp set at the moment of entry creation */
-  createdAt: string
 
   farmerId: string
   farmerName: string
-  canId: string
-  volumeLitres?: number
+  canVolume?: number
 
   operatorId: string
   operatorName: string
 
-  testValues: TestValues
-  gradingResult: GradingResult
+  /** Raw test readings — what the instrument produced. */
+  fatPercent: number
+  snfPercent: number
+  /** Temperature in CELSIUS. */
+  temperatureC: number
+  adulterationPositive: boolean
 
-  /** Final decision — may differ from gradingResult.decision if overridden */
-  finalDecision: Decision
+  /** Auto-graded decision before any operator override. */
+  autoDecision: 'accepted' | 'rejected'
+  /** Reason codes from auto-grading. */
+  reasonCodes: import('@/types/database').DbReasonCode[]
+  /** Whether any reading was near a threshold. */
+  isBorderline: boolean
 
-  /** Set if the operator overrode the auto-suggested decision */
+  /** Final decision — may differ from autoDecision if operator overrides. */
+  finalDecision: 'accepted' | 'rejected'
   isOverride: boolean
   overrideReason?: string
 
-  /** Short reference code for QR / dispute lookup (e.g. "MCC-20240115-A3F2") */
+  /** Short reference code for QR / dispute lookup (e.g. "MCC-20260915-A3F2"). */
   referenceCode: string
 
-  /** Optional photo evidence (URL or base64 data URL) */
+  /** Optional photo evidence (URL or base64 data URL). */
   photoUrl?: string
 
-  /** Sync state for offline queue */
-  syncStatus: SyncStatus
+  /** ISO string: when the physical test was performed on the device. */
+  testPerformedAt: string
 
-  /** Device/session metadata for audit trail */
+  /** Client-side sync state — NOT stored in Postgres. */
+  syncStatus: 'pending' | 'synced' | 'failed'
+
+  /** Device/session metadata for audit trail. */
   deviceInfo?: string
 }
 
