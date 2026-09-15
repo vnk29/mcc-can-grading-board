@@ -49,6 +49,7 @@ function test(name: string, fn: () => void): void {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const GOOD: CanTestInput = {
+  canVolume: 20,
   fatPercent: 4.2,
   snfPercent: 8.9,
   temperatureC: 6.5,
@@ -103,6 +104,7 @@ test('7. Borderline — fat exactly at threshold (3.5%) — accepted but flagged
   assert('decision is accepted', r.decision === 'accepted')
   assert('isBorderline is true', r.isBorderline)
   assert('LOW_FAT not in rejection codes', !r.reasonCodes.includes('LOW_FAT'))
+  assert('LOW_FAT in borderlineFlags', r.borderlineFlags.includes('LOW_FAT'))
 })
 
 test('8. Borderline — temperature exactly at threshold (10°C) — accepted but flagged', () => {
@@ -110,6 +112,7 @@ test('8. Borderline — temperature exactly at threshold (10°C) — accepted bu
   assert('decision is accepted', r.decision === 'accepted')
   assert('isBorderline is true', r.isBorderline)
   assert('HIGH_TEMPERATURE not in rejection codes', !r.reasonCodes.includes('HIGH_TEMPERATURE'))
+  assert('HIGH_TEMPERATURE in borderlineFlags', r.borderlineFlags.includes('HIGH_TEMPERATURE'))
 })
 
 test('9. Borderline — SNF exactly at threshold (8.5%) — accepted but flagged', () => {
@@ -117,6 +120,7 @@ test('9. Borderline — SNF exactly at threshold (8.5%) — accepted but flagged
   assert('decision is accepted', r.decision === 'accepted')
   assert('isBorderline is true', r.isBorderline)
   assert('LOW_SNF not in rejection codes', !r.reasonCodes.includes('LOW_SNF'))
+  assert('LOW_SNF in borderlineFlags', r.borderlineFlags.includes('LOW_SNF'))
 })
 
 test('10. Floating-point boundary: fat 3.6% — (3.6 - 3.5 = 0.099... in JS)', () => {
@@ -156,8 +160,23 @@ test('14. Non-boolean adulteration value (null) → INVALID_ADULTERATION_RESULT'
   assert('hasInvalidReadings is true', r.hasInvalidReadings)
 })
 
+test('14b. Bounds checking for numeric fields', () => {
+  const volFail = evaluateCanTest({ ...GOOD, canVolume: 0 })
+  assert('can volume <= 0 is invalid', volFail.reasonCodes.includes('INVALID_VOLUME'))
+  
+  const fatFail = evaluateCanTest({ ...GOOD, fatPercent: 16 })
+  assert('fat > 15 is invalid', fatFail.reasonCodes.includes('INVALID_FAT_PERCENT_RANGE'))
+  
+  const snfFail = evaluateCanTest({ ...GOOD, snfPercent: 3 })
+  assert('snf < 4 is invalid', snfFail.reasonCodes.includes('INVALID_SNF_PERCENT_RANGE'))
+  
+  const tempFail = evaluateCanTest({ ...GOOD, temperatureC: 45 })
+  assert('temp > 40 is invalid', tempFail.reasonCodes.includes('INVALID_TEMPERATURE_RANGE'))
+})
+
 test('15. Null input object → all INVALID codes', () => {
   const r = evaluateCanTest(null)
+  assert('INVALID_VOLUME present', r.reasonCodes.includes('INVALID_VOLUME'))
   assert('INVALID_FAT_PERCENT present', r.reasonCodes.includes('INVALID_FAT_PERCENT'))
   assert('INVALID_SNF_PERCENT present', r.reasonCodes.includes('INVALID_SNF_PERCENT'))
   assert('INVALID_TEMPERATURE present', r.reasonCodes.includes('INVALID_TEMPERATURE'))

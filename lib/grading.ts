@@ -52,6 +52,8 @@ import type { CanDecision, CanTestInsert, DbReasonCode } from '@/types/database'
  * persisting to the database.
  */
 export interface CanTestInput {
+  /** Volume of the can in litres. Must be finite and > 0. */
+  canVolume?: number | null
   /** Fat content (percent by weight). Must be finite and non-negative. */
   fatPercent?: number | null
   /** Solids-Not-Fat content (percent by weight). Must be finite and non-negative. */
@@ -77,9 +79,13 @@ export interface CanTestInput {
  * GradingReasonCode is the union used within the engine output.
  */
 export type InvalidReadingReasonCode =
+  | 'INVALID_VOLUME'
   | 'INVALID_FAT_PERCENT'
+  | 'INVALID_FAT_PERCENT_RANGE'
   | 'INVALID_SNF_PERCENT'
+  | 'INVALID_SNF_PERCENT_RANGE'
   | 'INVALID_TEMPERATURE'
+  | 'INVALID_TEMPERATURE_RANGE'
   | 'INVALID_ADULTERATION_RESULT'
 
 /** All reason codes the grading engine can return. */
@@ -104,8 +110,33 @@ export interface CanTestEvaluation {
    * used only to prompt the operator to double-check the reading.
    */
   isBorderline: boolean
+  /**
+   * The specific reason codes (e.g. 'LOW_FAT') that triggered the borderline flag.
+   */
+  borderlineFlags: GradingReasonCode[]
   /** Convenience: true if any INVALID_* reason code is present. */
   hasInvalidReadings: boolean
+}
+
+// ─── Human-Readable Labels ───────────────────────────────────────────────────
+
+export const REASON_LABELS: Record<GradingReasonCode, string> = {
+  // DB Codes
+  LOW_FAT: 'Low fat percentage',
+  LOW_SNF: 'Low SNF percentage',
+  HIGH_TEMPERATURE: 'Temperature above limit',
+  ADULTERATION_DETECTED: 'Adulteration detected',
+  OPERATOR_OVERRIDE: 'Operator override',
+  
+  // Invalid Input Codes
+  INVALID_VOLUME: 'Volume must be greater than 0',
+  INVALID_FAT_PERCENT: 'Fat % must be a number',
+  INVALID_FAT_PERCENT_RANGE: 'Fat % must be between 0.1 and 15',
+  INVALID_SNF_PERCENT: 'SNF % must be a number',
+  INVALID_SNF_PERCENT_RANGE: 'SNF % must be between 4 and 15',
+  INVALID_TEMPERATURE: 'Temperature must be a number',
+  INVALID_TEMPERATURE_RANGE: 'Temperature must be between 0°C and 40°C',
+  INVALID_ADULTERATION_RESULT: 'Adulteration result is required'
 }
 
 // ─── Precision-Safe Numeric Helpers ──────────────────────────────────────────
@@ -173,12 +204,21 @@ export function evaluateCanTest(
   values: CanTestInput | null | undefined,
 ): CanTestEvaluation {
   const reasonCodes: GradingReasonCode[] = []
+  const borderlineFlags: GradingReasonCode[] = []
   let isBorderline = false
+
+  // ── Volume ─────────────────────────────────────────────────────────────────
+  const canVolume = values?.canVolume
+  if (!isValidReading(canVolume) || canVolume <= 0) {
+    reasonCodes.push('INVALID_VOLUME')
+  }
 
   // ── Fat % ──────────────────────────────────────────────────────────────────
   const fatPercent = values?.fatPercent
   if (!isValidReading(fatPercent)) {
     reasonCodes.push('INVALID_FAT_PERCENT')
+  } else if (fatPercent < 0.1 || fatPercent > 15) {
+    reasonCodes.push('INVALID_FAT_PERCENT_RANGE')
   } else {
     if (fatPercent < MIN_FAT_PERCENT) {
       // Fat below the minimum means the can does not meet the centre's richness standard.
@@ -187,6 +227,7 @@ export function evaluateCanTest(
     if (isNearThreshold(fatPercent, MIN_FAT_PERCENT, FAT_BORDERLINE_DELTA)) {
       // Reading is within instrument tolerance of the threshold — flag for review.
       isBorderline = true
+      borderlineFlags.push('LOW_FAT')
     }
   }
 
@@ -194,6 +235,8 @@ export function evaluateCanTest(
   const snfPercent = values?.snfPercent
   if (!isValidReading(snfPercent)) {
     reasonCodes.push('INVALID_SNF_PERCENT')
+  } else if (snfPercent < 4 || snfPercent > 15) {
+    reasonCodes.push('INVALID_SNF_PERCENT_RANGE')
   } else {
     if (snfPercent < MIN_SNF_PERCENT) {
       // Insufficient solids-not-fat indicates the milk may be watered down.
@@ -201,6 +244,7 @@ export function evaluateCanTest(
     }
     if (isNearThreshold(snfPercent, MIN_SNF_PERCENT, SNF_BORDERLINE_DELTA)) {
       isBorderline = true
+      borderlineFlags.push('LOW_SNF')
     }
   }
 
@@ -208,6 +252,8 @@ export function evaluateCanTest(
   const temperatureC = values?.temperatureC
   if (!isValidReading(temperatureC)) {
     reasonCodes.push('INVALID_TEMPERATURE')
+  } else if (temperatureC < 0 || temperatureC > 40) {
+    reasonCodes.push('INVALID_TEMPERATURE_RANGE')
   } else {
     if (temperatureC > MAX_TEMPERATURE_C) {
       // Milk warmer than the maximum deteriorates more quickly and must be rejected.
@@ -215,6 +261,7 @@ export function evaluateCanTest(
     }
     if (isNearThreshold(temperatureC, MAX_TEMPERATURE_C, TEMPERATURE_BORDERLINE_DELTA)) {
       isBorderline = true
+      borderlineFlags.push('HIGH_TEMPERATURE')
     }
   }
 
@@ -233,6 +280,7 @@ export function evaluateCanTest(
     decision: reasonCodes.length === 0 ? 'accepted' : 'rejected',
     reasonCodes,
     isBorderline,
+    borderlineFlags,
     hasInvalidReadings,
   }
 }

@@ -72,7 +72,7 @@ export type SyncStatus = 'pending' | 'synced' | 'failed'
 
 // ─── Operators ───────────────────────────────────────────────────────────────
 
-export interface OperatorRow {
+export type OperatorRow = {
   id: string
   name: string
   pin: string
@@ -80,7 +80,7 @@ export interface OperatorRow {
 }
 
 /** Operators are admin/seed-managed. The client API only reads them. */
-export interface OperatorInsert {
+export type OperatorInsert = {
   id?: string
   name: string
   pin: string
@@ -89,7 +89,7 @@ export interface OperatorInsert {
 
 // ─── Farmers ─────────────────────────────────────────────────────────────────
 
-export interface FarmerRow {
+export type FarmerRow = {
   id: string
   name: string
   phone: string | null
@@ -97,7 +97,7 @@ export interface FarmerRow {
   created_at: string
 }
 
-export interface FarmerInsert {
+export type FarmerInsert = {
   id?: string
   name: string
   phone?: string | null
@@ -107,7 +107,7 @@ export interface FarmerInsert {
 
 // ─── Can Tests ───────────────────────────────────────────────────────────────
 
-export interface CanTestRow {
+export type CanTestRow = {
   id: string
   farmer_id: string
   operator_id: string
@@ -134,7 +134,7 @@ export interface CanTestRow {
   created_at: string
 }
 
-export interface CanTestInsert {
+export type CanTestInsert = {
   id?: string
   farmer_id: string
   operator_id: string
@@ -158,7 +158,7 @@ export interface CanTestInsert {
 
 // ─── Corrections ─────────────────────────────────────────────────────────────
 
-export interface CorrectionRow {
+export type CorrectionRow = {
   id: string
   can_test_id: string
   old_values: Record<string, unknown>
@@ -168,7 +168,7 @@ export interface CorrectionRow {
   created_at: string
 }
 
-export interface CorrectionInsert {
+export type CorrectionInsert = {
   id?: string
   can_test_id: string
   old_values: Record<string, unknown>
@@ -201,29 +201,71 @@ export interface CorrectionWithOperator extends CorrectionRow {
  * insert-only. Any attempt to build an `.update()` query against them
  * will be caught at compile time.
  */
-export interface Database {
+export type Database = {
   public: {
     Tables: {
       operators: {
         Row: OperatorRow
         Insert: OperatorInsert
         Update: Partial<Omit<OperatorRow, 'id' | 'created_at'>>
+        Relationships: []
       }
       farmers: {
         Row: FarmerRow
         Insert: FarmerInsert
         Update: Partial<Omit<FarmerRow, 'id' | 'created_at'>>
+        Relationships: []
       }
       can_tests: {
         Row: CanTestRow
         Insert: CanTestInsert
-        Update: never  // Immutable — enforced by RLS (no UPDATE policy)
+        Update: never  // Immutable — enforced by Postgres RLS (no UPDATE policy)
+        Relationships: [
+          {
+            foreignKeyName: "can_tests_farmer_id_fkey"
+            columns: ["farmer_id"]
+            referencedRelation: "farmers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "can_tests_operator_id_fkey"
+            columns: ["operator_id"]
+            referencedRelation: "operators"
+            referencedColumns: ["id"]
+          }
+        ]
       }
       corrections: {
         Row: CorrectionRow
         Insert: CorrectionInsert
-        Update: never  // Append-only — enforced by RLS (no UPDATE policy)
+        Update: never  // Append-only — enforced by Postgres RLS
+        Relationships: [
+          {
+            foreignKeyName: "corrections_can_test_id_fkey"
+            columns: ["can_test_id"]
+            referencedRelation: "can_tests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "corrections_corrected_by_fkey"
+            columns: ["corrected_by"]
+            referencedRelation: "operators"
+            referencedColumns: ["id"]
+          }
+        ]
       }
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      [_ in never]: never
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
     }
   }
 }
