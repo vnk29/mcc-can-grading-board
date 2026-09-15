@@ -198,6 +198,7 @@ test('16. mapToDbInsert() produces correct snake_case shape', () => {
     autoDecision: 'accepted',
     decision: 'accepted',
     isBorderline: false,
+    borderlineFlags: [],
     reasonCodes: [],
     isOverride: false,
     overrideReason: null,

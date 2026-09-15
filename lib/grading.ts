@@ -312,6 +312,8 @@ export interface CanTestAppEntry {
   isBorderline: boolean
   /** Reason codes that will be persisted. Must NOT contain INVALID_* codes. */
   reasonCodes: DbReasonCode[]
+  /** Reason codes indicating exactly which measurements were near limits. */
+  borderlineFlags: DbReasonCode[]
   isOverride: boolean
   overrideReason: string | null
   referenceCode: string
@@ -344,6 +346,7 @@ export function mapToDbInsert(entry: CanTestAppEntry): CanTestInsert {
     decision: entry.decision,
     is_borderline: entry.isBorderline,
     reason_codes: entry.reasonCodes,
+    borderline_flags: entry.borderlineFlags,
     is_override: entry.isOverride,
     override_reason: entry.overrideReason,
     reference_code: entry.referenceCode,

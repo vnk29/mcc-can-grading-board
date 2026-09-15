@@ -87,6 +87,7 @@ export interface CanTestEntry {
   reasonCodes: import('@/types/database').DbReasonCode[]
   /** Whether any reading was near a threshold. */
   isBorderline: boolean
+  borderlineFlags: import('@/types/database').DbReasonCode[]
 
   /** Final decision — may differ from autoDecision if operator overrides. */
   finalDecision: 'accepted' | 'rejected'

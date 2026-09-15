@@ -7,7 +7,8 @@ import { format } from 'date-fns'
 
 import { supabase } from '@/lib/supabase'
 import { REASON_LABELS } from '@/lib/grading'
-import type { CanTestWithDetails, CorrectionWithOperator, OperatorRow } from '@/types/database'
+import { MIN_FAT_PERCENT, MIN_SNF_PERCENT, MAX_TEMPERATURE_C } from '@/lib/config'
+import type { CanTestWithDetails, CorrectionWithOperator } from '@/types/database'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -31,7 +32,7 @@ export default function RecordDetailPage({
   
   const [record, setRecord] = useState<CanTestWithDetails | null>(null)
   const [corrections, setCorrections] = useState<CorrectionWithOperator[]>([])
-  const [operators, setOperators] = useState<OperatorRow[]>([])
+  const [operators, setOperators] = useState<{ id: string; name: string }[]>([])
 
   // Correction Modal State
   const [showCorrectionModal, setShowCorrectionModal] = useState(false)
@@ -94,7 +95,7 @@ export default function RecordDetailPage({
       setCorrections((corrData || []) as unknown as CorrectionWithOperator[])
 
       // 3. Fetch operators for the correction auth
-      const { data: opsData } = await supabase.from('operators').select('*').order('name')
+      const { data: opsData } = await supabase.from('operators').select('id, name').order('name')
       if (opsData) {
         setOperators(opsData)
         
@@ -133,15 +134,17 @@ export default function RecordDetailPage({
   }
 
   const verifyPin = () => {
-    const op = operators.find(o => o.id === activeOperatorId)
-    if (op && op.pin === pinInput) {
-      sessionStorage.setItem('active_operator_id', op.id)
+    // We now just check if they typed *something* and save it.
+    // The actual PIN verification happens inside the secure RPC on submit.
+    if (pinInput.trim().length > 0) {
+      sessionStorage.setItem('active_operator_id', activeOperatorId)
+      sessionStorage.setItem('active_operator_pin', pinInput)
       setShowPinDialog(false)
       setPinInput('')
       setPinError('')
       handleOpenCorrection()
     } else {
-      setPinError('Incorrect PIN')
+      setPinError('PIN is required')
     }
   }
 
@@ -184,12 +187,15 @@ export default function RecordDetailPage({
         return
       }
 
-      const { error } = await supabase.from('corrections').insert({
-        can_test_id: record.id,
-        corrected_by: activeOperatorId,
-        reason: correctionReason.trim(),
-        old_values: oldValues,
-        new_values: newValues
+      const activePin = sessionStorage.getItem('active_operator_pin') || ''
+
+      const { error } = await supabase.rpc('submit_correction', {
+        p_operator_id: activeOperatorId,
+        p_pin: activePin,
+        p_can_test_id: record.id,
+        p_old_values: oldValues,
+        p_new_values: newValues,
+        p_reason: correctionReason.trim()
       })
 
       if (error) throw error
@@ -354,9 +360,22 @@ export default function RecordDetailPage({
                    <AlertTriangle className="w-5 h-5 text-amber-600" />
                    <h3 className="font-bold text-amber-900 tracking-tight">BORDERLINE — REVIEW</h3>
                  </div>
-                 <p className="text-sm text-amber-800 font-medium">
+                 <p className="text-sm text-amber-800 font-medium mb-2">
                    This test contained measurements that were very close to the rejection thresholds.
                  </p>
+                 {record.borderline_flags && record.borderline_flags.length > 0 && (
+                    <ul className="list-disc pl-5 text-sm text-amber-900 space-y-1">
+                      {record.borderline_flags.includes('LOW_FAT') && (
+                        <li>Fat {record.fat_percent.toFixed(2)}% is near the {MIN_FAT_PERCENT.toFixed(2)}% limit</li>
+                      )}
+                      {record.borderline_flags.includes('LOW_SNF') && (
+                        <li>SNF {record.snf_percent.toFixed(2)}% is near the {MIN_SNF_PERCENT.toFixed(2)}% limit</li>
+                      )}
+                      {record.borderline_flags.includes('HIGH_TEMPERATURE') && (
+                        <li>Temperature {record.temperature.toFixed(1)}°C is near the {MAX_TEMPERATURE_C.toFixed(1)}°C limit</li>
+                      )}
+                    </ul>
+                 )}
                </div>
             )}
 

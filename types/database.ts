@@ -128,6 +128,8 @@ export type CanTestRow = {
   is_borderline: boolean | null
   /** Persistable reason codes only. Must not contain INVALID_* values. */
   reason_codes: DbReasonCode[]
+  /** Reason codes indicating exactly which measurements were near limits. */
+  borderline_flags: DbReasonCode[]
   is_override: boolean
   override_reason: string | null
   reference_code: string
@@ -153,6 +155,7 @@ export type CanTestInsert = {
   is_borderline: boolean
   /** Must NOT contain INVALID_* codes — validate before calling. */
   reason_codes?: DbReasonCode[]
+  borderline_flags?: DbReasonCode[]
   is_override?: boolean
   override_reason?: string | null
   reference_code: string
@@ -265,7 +268,17 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      submit_correction: {
+        Args: {
+          p_operator_id: string
+          p_pin: string
+          p_can_test_id: string
+          p_old_values: Record<string, unknown>
+          p_new_values: Record<string, unknown>
+          p_reason: string
+        }
+        Returns: { id: string }
+      }
     }
     Enums: {
       [_ in never]: never

@@ -51,7 +51,7 @@ export default function LookupSearchPage() {
         .from('can_tests')
         .select(`
           *,
-          farmer:farmers!inner (name, phone, village),
+          farmer:farmers!inner (name),
           operator:operators (name)
         `)
         .order('test_performed_at', { ascending: false })

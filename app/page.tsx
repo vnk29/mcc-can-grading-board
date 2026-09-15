@@ -27,14 +27,14 @@ export default function IntakePage() {
   const submitLock = useRef(false)
   
   // Data State
-  const [operators, setOperators] = useState<OperatorRow[]>([])
+  const [operators, setOperators] = useState<Pick<OperatorRow, 'id' | 'name'>[]>([])
   const [farmers, setFarmers] = useState<FarmerRow[]>([])
   const [isLoadingData, setIsLoadingData] = useState(true)
   const [dataLoadError, setDataLoadError] = useState<string | null>(null)
 
   // PIN Verification State
   const [operatorId, setOperatorId] = useState<string>('')
-  const [activeOperator, setActiveOperator] = useState<OperatorRow | null>(null)
+  const [activeOperator, setActiveOperator] = useState<Pick<OperatorRow, 'id' | 'name'> | null>(null)
   const [showPinDialog, setShowPinDialog] = useState(false)
   const [pinInput, setPinInput] = useState('')
   const [pinError, setPinError] = useState('')
@@ -64,14 +64,14 @@ export default function IntakePage() {
     setDataLoadError(null)
     try {
       const [opRes, fmRes] = await Promise.all([
-        supabase.from('operators').select('*').order('name'),
+        supabase.from('operators').select('id, name').order('name'),
         supabase.from('farmers').select('*').order('name')
       ])
       
       if (opRes.error) throw opRes.error
       if (fmRes.error) throw fmRes.error
 
-      const operatorsData = opRes.data as OperatorRow[]
+      const operatorsData = opRes.data as Pick<OperatorRow, 'id' | 'name'>[]
       const farmersData = fmRes.data as FarmerRow[]
 
       setOperators(operatorsData)
@@ -107,12 +107,14 @@ export default function IntakePage() {
 
   const verifyPin = () => {
     const op = operators.find(o => o.id === operatorId)
-    if (op && op.pin === pinInput) {
+    // Accept any non-empty PIN since we no longer send PINs to the browser.
+    if (op && pinInput.trim().length > 0) {
       setActiveOperator(op)
       sessionStorage.setItem('active_operator_id', op.id)
+      sessionStorage.setItem('active_operator_pin', pinInput)
       setShowPinDialog(false)
     } else {
-      setPinError('Incorrect PIN')
+      setPinError('PIN is required')
     }
   }
   
@@ -195,6 +197,7 @@ export default function IntakePage() {
         autoDecision: evaluation.decision,
         decision: finalDecision,
         isBorderline: evaluation.isBorderline,
+        borderlineFlags: evaluation.borderlineFlags as DbReasonCode[],
         reasonCodes: finalReasonCodes,
         isOverride,
         overrideReason: isOverride ? overrideReason.trim() : null,
@@ -258,6 +261,7 @@ export default function IntakePage() {
            autoDecision: evaluation.decision,
            finalDecision,
            isBorderline: evaluation.isBorderline,
+           borderlineFlags: evaluation.borderlineFlags as DbReasonCode[],
            syncStatus: 'pending'
          })
          
