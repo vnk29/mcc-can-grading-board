@@ -25,8 +25,10 @@ export default function ResultPage({ params }: { params: Promise<{ reference: st
   const [record, setRecord] = useState<{
     referenceCode: string
     finalDecision: 'accepted' | 'rejected'
+    autoDecision?: 'accepted' | 'rejected'
     isBorderline: boolean
     isOverride: boolean
+    overrideReason?: string | null
     reasonCodes: string[]
     testPerformedAt: string
     isOffline: boolean
@@ -50,8 +52,10 @@ export default function ResultPage({ params }: { params: Promise<{ reference: st
           setRecord({
             referenceCode: row.reference_code,
             finalDecision: row.decision,
-            isBorderline: false,
+            autoDecision: row.auto_decision || undefined,
+            isBorderline: row.is_borderline === true,
             isOverride: row.is_override,
+            overrideReason: row.override_reason,
             reasonCodes: row.reason_codes,
             testPerformedAt: row.test_performed_at,
             isOffline: false
@@ -67,8 +71,10 @@ export default function ResultPage({ params }: { params: Promise<{ reference: st
           setRecord({
             referenceCode: offlineMatch.referenceCode,
             finalDecision: offlineMatch.finalDecision,
+            autoDecision: offlineMatch.autoDecision,
             isBorderline: offlineMatch.isBorderline,
             isOverride: offlineMatch.isOverride,
+            overrideReason: offlineMatch.overrideReason,
             reasonCodes: offlineMatch.reasonCodes,
             testPerformedAt: offlineMatch.testPerformedAt,
             isOffline: true
@@ -119,7 +125,7 @@ export default function ResultPage({ params }: { params: Promise<{ reference: st
     )
   }
 
-  const { finalDecision, isBorderline, isOverride, reasonCodes, isOffline } = record
+  const { finalDecision, autoDecision, isBorderline, isOverride, overrideReason, reasonCodes, isOffline } = record
   
   // Format the timestamp nicely for the slip
   const dateObj = new Date(record.testPerformedAt)
@@ -154,8 +160,8 @@ export default function ResultPage({ params }: { params: Promise<{ reference: st
             <h1 className="text-3xl font-black tracking-tight mb-2 uppercase">
               {isOverride 
                 ? `${finalDecision} (OVERRIDE)`
-                : isBorderline && finalDecision === 'accepted' 
-                  ? 'BORDERLINE - REVIEW'
+                : isBorderline
+                  ? `${finalDecision} - BORDERLINE - REVIEW`
                   : finalDecision
               }
             </h1>
@@ -163,6 +169,14 @@ export default function ResultPage({ params }: { params: Promise<{ reference: st
           </div>
 
           <CardContent className="p-6 space-y-6 bg-white">
+
+            {isOverride && (
+              <div className="space-y-2 border-b border-slate-100 pb-4">
+                <p className="text-sm font-bold text-slate-900">System suggestion: {autoDecision || 'Unavailable for this legacy record'}</p>
+                <p className="text-sm text-slate-700">Final decision: {finalDecision}</p>
+                <p className="text-sm text-slate-700">Override reason: {overrideReason || 'No override reason provided'}</p>
+              </div>
+            )}
             
             {reasonCodes.length > 0 && (
               <div className="space-y-3">

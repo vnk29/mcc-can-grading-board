@@ -38,13 +38,13 @@ INSERT INTO farmers (id, name, phone, village) VALUES
 INSERT INTO can_tests (
   id, farmer_id, operator_id, can_volume,
   fat_percent, snf_percent, temperature, adulteration_result,
-  decision, reason_codes, is_override, override_reason,
+  auto_decision, decision, is_borderline, reason_codes, is_override, override_reason,
   reference_code, test_performed_at
 ) VALUES (
   'c3d4e5f6-0003-4000-8000-000000000001',
   'b2c3d4e5-0002-4000-8000-000000000001', 'a1b2c3d4-0001-4000-8000-000000000001',
   20, 4.2, 8.9, 6.5, false,
-  'accepted', '{}', false, null,
+  'accepted', 'accepted', false, '{}', false, null,
   'MCC-20260915-A001', '2026-09-15 06:15:00+05:30'
 );
 
@@ -52,13 +52,13 @@ INSERT INTO can_tests (
 INSERT INTO can_tests (
   id, farmer_id, operator_id, can_volume,
   fat_percent, snf_percent, temperature, adulteration_result,
-  decision, reason_codes, is_override, override_reason,
+  auto_decision, decision, is_borderline, reason_codes, is_override, override_reason,
   reference_code, test_performed_at
 ) VALUES (
   'c3d4e5f6-0003-4000-8000-000000000002',
   'b2c3d4e5-0002-4000-8000-000000000002', 'a1b2c3d4-0001-4000-8000-000000000001',
   15, 3.8, 8.7, 7.2, false,
-  'accepted', '{}', false, null,
+  'accepted', 'accepted', false, '{}', false, null,
   'MCC-20260915-A002', '2026-09-15 06:18:00+05:30'
 );
 
@@ -66,13 +66,13 @@ INSERT INTO can_tests (
 INSERT INTO can_tests (
   id, farmer_id, operator_id, can_volume,
   fat_percent, snf_percent, temperature, adulteration_result,
-  decision, reason_codes, is_override, override_reason,
+  auto_decision, decision, is_borderline, reason_codes, is_override, override_reason,
   reference_code, test_performed_at
 ) VALUES (
   'c3d4e5f6-0003-4000-8000-000000000003',
   'b2c3d4e5-0002-4000-8000-000000000003', 'a1b2c3d4-0001-4000-8000-000000000001',
   25, 2.8, 8.6, 8.0, false,
-  'rejected', '{LOW_FAT}', false, null,
+  'rejected', 'rejected', false, '{LOW_FAT}', false, null,
   'MCC-20260915-R003', '2026-09-15 06:22:00+05:30'
 );
 
@@ -80,13 +80,13 @@ INSERT INTO can_tests (
 INSERT INTO can_tests (
   id, farmer_id, operator_id, can_volume,
   fat_percent, snf_percent, temperature, adulteration_result,
-  decision, reason_codes, is_override, override_reason,
+  auto_decision, decision, is_borderline, reason_codes, is_override, override_reason,
   reference_code, test_performed_at
 ) VALUES (
   'c3d4e5f6-0003-4000-8000-000000000004',
   'b2c3d4e5-0002-4000-8000-000000000004', 'a1b2c3d4-0001-4000-8000-000000000002',
   18, 3.6, 8.5, 14.0, true,
-  'rejected', '{HIGH_TEMPERATURE,ADULTERATION_DETECTED}', false, null,
+  'rejected', 'rejected', true, '{HIGH_TEMPERATURE,ADULTERATION_DETECTED}', false, null,
   'MCC-20260915-R004', '2026-09-15 06:25:00+05:30'
 );
 
@@ -94,13 +94,13 @@ INSERT INTO can_tests (
 INSERT INTO can_tests (
   id, farmer_id, operator_id, can_volume,
   fat_percent, snf_percent, temperature, adulteration_result,
-  decision, reason_codes, is_override, override_reason,
+  auto_decision, decision, is_borderline, reason_codes, is_override, override_reason,
   reference_code, test_performed_at
 ) VALUES (
   'c3d4e5f6-0003-4000-8000-000000000005',
   'b2c3d4e5-0002-4000-8000-000000000005', 'a1b2c3d4-0001-4000-8000-000000000001',
   22, 3.5, 8.8, 9.0, false,
-  'accepted', '{}', false, null,
+  'accepted', 'accepted', true, '{}', false, null,
   'MCC-20260915-B005', '2026-09-15 06:30:00+05:30'
 );
 
@@ -108,13 +108,13 @@ INSERT INTO can_tests (
 INSERT INTO can_tests (
   id, farmer_id, operator_id, can_volume,
   fat_percent, snf_percent, temperature, adulteration_result,
-  decision, reason_codes, is_override, override_reason,
+  auto_decision, decision, is_borderline, reason_codes, is_override, override_reason,
   reference_code, test_performed_at
 ) VALUES (
   'c3d4e5f6-0003-4000-8000-000000000006',
   'b2c3d4e5-0002-4000-8000-000000000001', 'a1b2c3d4-0001-4000-8000-000000000002',
   20, 3.7, 8.51, 10.0, false,
-  'accepted', '{}', false, null,
+  'accepted', 'accepted', true, '{}', false, null,
   'MCC-20260915-B006', '2026-09-15 06:35:00+05:30'
 );
 
@@ -123,13 +123,13 @@ INSERT INTO can_tests (
 INSERT INTO can_tests (
   id, farmer_id, operator_id, can_volume,
   fat_percent, snf_percent, temperature, adulteration_result,
-  decision, reason_codes, is_override, override_reason,
+  auto_decision, decision, is_borderline, reason_codes, is_override, override_reason,
   reference_code, test_performed_at
 ) VALUES (
   'c3d4e5f6-0003-4000-8000-000000000007',
   'b2c3d4e5-0002-4000-8000-000000000002', 'a1b2c3d4-0001-4000-8000-000000000001',
   12, 4.0, 8.3, 7.5, false,
-  'accepted', '{LOW_SNF}', true,
+  'rejected', 'accepted', true, '{LOW_SNF}', true,
   'Instrument recalibrated — re-tested SNF reads 8.55%, within tolerance',
   'MCC-20260915-O007', '2026-09-15 06:40:00+05:30'
 );
@@ -138,13 +138,13 @@ INSERT INTO can_tests (
 INSERT INTO can_tests (
   id, farmer_id, operator_id, can_volume,
   fat_percent, snf_percent, temperature, adulteration_result,
-  decision, reason_codes, is_override, override_reason,
+  auto_decision, decision, is_borderline, reason_codes, is_override, override_reason,
   reference_code, test_performed_at
 ) VALUES (
   'c3d4e5f6-0003-4000-8000-000000000008',
   'b2c3d4e5-0002-4000-8000-000000000003', 'a1b2c3d4-0001-4000-8000-000000000002',
   30, 2.1, 7.9, 8.0, false,
-  'rejected', '{LOW_FAT,LOW_SNF}', false, null,
+  'rejected', 'rejected', false, '{LOW_FAT,LOW_SNF}', false, null,
   'MCC-20260915-R008', '2026-09-15 06:45:00+05:30'
 );
 
@@ -152,13 +152,13 @@ INSERT INTO can_tests (
 INSERT INTO can_tests (
   id, farmer_id, operator_id, can_volume,
   fat_percent, snf_percent, temperature, adulteration_result,
-  decision, reason_codes, is_override, override_reason,
+  auto_decision, decision, is_borderline, reason_codes, is_override, override_reason,
   reference_code, test_performed_at
 ) VALUES (
   'c3d4e5f6-0003-4000-8000-000000000009',
   'b2c3d4e5-0002-4000-8000-000000000004', 'a1b2c3d4-0001-4000-8000-000000000002',
   16, 4.5, 9.1, 5.0, false,
-  'accepted', '{}', false, null,
+  'accepted', 'accepted', false, '{}', false, null,
   'MCC-20260915-A009', '2026-09-15 16:10:00+05:30'
 );
 
@@ -167,13 +167,13 @@ INSERT INTO can_tests (
 INSERT INTO can_tests (
   id, farmer_id, operator_id, can_volume,
   fat_percent, snf_percent, temperature, adulteration_result,
-  decision, reason_codes, is_override, override_reason,
+  auto_decision, decision, is_borderline, reason_codes, is_override, override_reason,
   reference_code, test_performed_at
 ) VALUES (
   'c3d4e5f6-0003-4000-8000-000000000010',
   'b2c3d4e5-0002-4000-8000-000000000005', 'a1b2c3d4-0001-4000-8000-000000000002',
   20, 3.9, 8.7, 8.5, false,
-  'rejected', '{OPERATOR_OVERRIDE}', true,
+  'accepted', 'rejected', false, '{OPERATOR_OVERRIDE}', true,
   'Milk has unusual yellowish tint and off-smell — rejecting as precaution despite passing instrument tests',
   'MCC-20260915-O010', '2026-09-15 16:15:00+05:30'
 );

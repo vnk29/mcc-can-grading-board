@@ -305,7 +305,11 @@ export interface CanTestAppEntry {
   /** Temperature in CELSIUS. Named with C suffix for clarity. */
   temperatureC: number
   adulterationPositive: boolean
+  /** Automatic decision before any operator override. */
+  autoDecision: CanDecision
   decision: CanDecision
+  /** Borderline status from the canonical evaluation before persistence. */
+  isBorderline: boolean
   /** Reason codes that will be persisted. Must NOT contain INVALID_* codes. */
   reasonCodes: DbReasonCode[]
   isOverride: boolean
@@ -336,7 +340,9 @@ export function mapToDbInsert(entry: CanTestAppEntry): CanTestInsert {
     snf_percent: entry.snfPercent,
     temperature: entry.temperatureC,     // °C — column name is unit-agnostic; app name is explicit
     adulteration_result: entry.adulterationPositive,
+    auto_decision: entry.autoDecision,
     decision: entry.decision,
+    is_borderline: entry.isBorderline,
     reason_codes: entry.reasonCodes,
     is_override: entry.isOverride,
     override_reason: entry.overrideReason,

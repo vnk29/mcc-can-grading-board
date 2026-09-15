@@ -121,7 +121,11 @@ export type CanTestRow = {
    */
   temperature: number
   adulteration_result: boolean
+  /** Automatic grading result before any operator override. Null for legacy rows. */
+  auto_decision: CanDecision | null
   decision: CanDecision
+  /** Borderline status from the original grading evaluation. Null for legacy rows. */
+  is_borderline: boolean | null
   /** Persistable reason codes only. Must not contain INVALID_* values. */
   reason_codes: DbReasonCode[]
   is_override: boolean
@@ -144,7 +148,9 @@ export type CanTestInsert = {
   /** Temperature in CELSIUS. Maps from app-layer field `temperatureC`. */
   temperature: number
   adulteration_result: boolean
+  auto_decision: CanDecision
   decision: CanDecision
+  is_borderline: boolean
   /** Must NOT contain INVALID_* codes — validate before calling. */
   reason_codes?: DbReasonCode[]
   is_override?: boolean
