@@ -3,9 +3,10 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { v4 as uuidv4 } from 'uuid'
-import { CheckCircle2, AlertTriangle, XCircle, Search, Save, Check, LogOut, AlertCircle, Loader2 } from 'lucide-react'
+import { CheckCircle2, AlertTriangle, XCircle, Search, Save, Check, LogOut, AlertCircle, Loader2, ClipboardList } from 'lucide-react'
+import Link from 'next/link'
 
-import { supabase } from '@/lib/supabase'
+import { supabase, isSupabaseConfigured } from '@/lib/supabase'
 import { enqueueEntry } from '@/lib/offlineQueue'
 import { evaluateCanTest, mapToDbInsert, REASON_LABELS, type CanTestAppEntry } from '@/lib/grading'
 import type { OperatorRow, FarmerRow, CanDecision, DbReasonCode } from '@/types/database'
@@ -64,6 +65,21 @@ export default function IntakePage() {
   const loadData = async () => {
     setIsLoadingData(true)
     setDataLoadError(null)
+
+    // Demo fallback for local testing without Supabase credentials
+    if (!isSupabaseConfigured) {
+      setOperators([
+        { id: 'demo-op-1', name: 'Demo Operator 1' },
+        { id: 'demo-op-2', name: 'Demo Operator 2' }
+      ])
+      setFarmers([
+        { id: 'demo-fm-1', name: 'Aarav Patel', village: 'North Village', phone: '555-0101', created_at: new Date().toISOString() },
+        { id: 'demo-fm-2', name: 'Priya Sharma', village: 'South Village', phone: '555-0102', created_at: new Date().toISOString() }
+      ])
+      setIsLoadingData(false)
+      return
+    }
+
     try {
       const [opRes, fmRes] = await Promise.all([
         supabase.from('operators').select('id, name').order('name'),
@@ -254,6 +270,13 @@ export default function IntakePage() {
     }
 
     // ── 5. Attempt Supabase insert ───────────────────────────────────────────
+    if (!isSupabaseConfigured) {
+      setSubmitError('Configuration Error: Database connection is not configured.')
+      setIsSubmitting(false)
+      submitLock.current = false
+      return
+    }
+
     try {
       const dbInsert = mapToDbInsert(appEntry)
       const { error } = await supabase.from('can_tests').insert(dbInsert)
@@ -271,12 +294,14 @@ export default function IntakePage() {
       router.push(`/result/${stableAudit.refCode}`)
       
     } catch (err: unknown) {
-      console.error(err)
+      // Diagnostic logging as requested
+      console.error('[Supabase Insert Error]', err)
       
       // Classify: network/transport error → queue offline
+      // A transport error from Supabase-js typically has an empty string code, or no code.
+      // A Postgres error always has a valid 5-character SQLSTATE code (e.g. '42P01').
       const isTransportError = err instanceof TypeError
-        || (err instanceof Error && err.message.includes('fetch'))
-        || (typeof err === 'object' && err !== null && !('code' in err))
+        || (typeof err === 'object' && err !== null && (!('code' in err) || (err as { code?: unknown }).code === ''))
       
       if (isTransportError) {
          console.warn('Network/Transport error detected, queuing offline:', err)
@@ -291,13 +316,16 @@ export default function IntakePage() {
       }
       
       // Real DB/RLS/validation error — show to operator, do NOT queue
-      if (err instanceof Error) {
-        setSubmitError(err.message || 'An unknown error occurred')
-      } else if (typeof err === 'object' && err !== null && 'message' in err) {
-        setSubmitError(String((err as {message: string}).message))
-      } else {
-        setSubmitError('An unknown error occurred')
+      let safeErrorMessage = 'An unknown database error occurred'
+      if (typeof err === 'object' && err !== null) {
+        const dbErr = err as { code?: string, message?: string, details?: string }
+        console.error(`[DB Error] Code: ${dbErr.code || 'None'}, Message: ${dbErr.message || 'None'}`)
+        if (dbErr.message) safeErrorMessage = dbErr.message
+      } else if (err instanceof Error) {
+        safeErrorMessage = err.message
       }
+      
+      setSubmitError(`Database Error: ${safeErrorMessage}`)
     } finally {
       setIsSubmitting(false)
       submitLock.current = false
@@ -398,9 +426,18 @@ export default function IntakePage() {
             <h1 className="text-xl font-bold tracking-tight text-slate-900">Milk Intake</h1>
             <p className="text-sm text-slate-500 font-medium">Op: {activeOperator.name}</p>
           </div>
-          <Button variant="ghost" size="sm" onClick={handleLogout} className="text-slate-500">
-            <LogOut className="w-4 h-4 mr-2" /> Logout
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" asChild className="text-slate-700">
+              <Link href="/lookup">
+                <ClipboardList className="w-4 h-4 mr-1 sm:mr-2" /> 
+                <span className="hidden sm:inline">Records</span>
+              </Link>
+            </Button>
+            <Button variant="ghost" size="sm" onClick={handleLogout} className="text-slate-500 px-2 sm:px-3">
+              <LogOut className="w-4 h-4 sm:mr-2" /> 
+              <span className="hidden sm:inline">Logout</span>
+            </Button>
+          </div>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
@@ -479,7 +516,6 @@ export default function IntakePage() {
                     type="number" 
                     step="0.1" 
                     min="0"
-                    max="100"
                     placeholder="0.0" 
                     className="h-14 sm:h-16 text-xl sm:text-2xl text-center bg-slate-50 font-medium"
                     value={canVolume}

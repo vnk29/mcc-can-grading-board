@@ -64,9 +64,9 @@ BEGIN
     RAISE EXCEPTION 'Invalid request: p_new_values must not be empty';
   END IF;
 
-  -- Expected fields for a correction are farmer_id, can_volume, and temperature.
-  -- Reject any unexpected fields.
-  IF (p_new_values - array['farmer_id', 'can_volume', 'temperature']) <> '{}'::jsonb THEN
+  -- Expected fields for a correction are farmer_id, can_volume, fat_percent,
+  -- snf_percent, temperature, and decision. Reject any unexpected fields.
+  IF (p_new_values - array['farmer_id', 'can_volume', 'fat_percent', 'snf_percent', 'temperature', 'decision']) <> '{}'::jsonb THEN
     RAISE EXCEPTION 'Invalid request: p_new_values contains unpermitted fields';
   END IF;
 
@@ -84,10 +84,31 @@ BEGIN
     END IF;
   END IF;
 
+  -- Validate fat_percent type and range (0 to 100)
+  IF p_new_values ? 'fat_percent' THEN
+    IF jsonb_typeof(p_new_values->'fat_percent') <> 'number' OR (p_new_values->>'fat_percent')::numeric < 0 OR (p_new_values->>'fat_percent')::numeric > 100 THEN
+      RAISE EXCEPTION 'Invalid request: fat_percent must be a number between 0 and 100';
+    END IF;
+  END IF;
+
+  -- Validate snf_percent type and range (0 to 100)
+  IF p_new_values ? 'snf_percent' THEN
+    IF jsonb_typeof(p_new_values->'snf_percent') <> 'number' OR (p_new_values->>'snf_percent')::numeric < 0 OR (p_new_values->>'snf_percent')::numeric > 100 THEN
+      RAISE EXCEPTION 'Invalid request: snf_percent must be a number between 0 and 100';
+    END IF;
+  END IF;
+
   -- Validate temperature type and range (0 to 40)
   IF p_new_values ? 'temperature' THEN
     IF jsonb_typeof(p_new_values->'temperature') <> 'number' OR (p_new_values->>'temperature')::numeric < 0 OR (p_new_values->>'temperature')::numeric > 40 THEN
       RAISE EXCEPTION 'Invalid request: temperature must be a number between 0 and 40';
+    END IF;
+  END IF;
+
+  -- Validate decision type and allowed values
+  IF p_new_values ? 'decision' THEN
+    IF jsonb_typeof(p_new_values->'decision') <> 'string' OR p_new_values->>'decision' NOT IN ('accepted', 'rejected') THEN
+      RAISE EXCEPTION 'Invalid request: decision must be either accepted or rejected';
     END IF;
   END IF;
 

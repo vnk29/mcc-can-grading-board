@@ -73,11 +73,13 @@ export function SyncStatusBar() {
               {isSyncing
                 ? 'Syncing...'
                 : !isOnline && totalQueued > 0
-                  ? `Saved Offline — ${totalQueued} ${totalQueued === 1 ? 'entry' : 'entries'} pending sync`
+                  ? failedCount > 0
+                    ? `Saved Offline — ${pendingCount} ${pendingCount === 1 ? 'entry' : 'entries'} pending sync; ${failedCount} ${failedCount === 1 ? 'entry' : 'entries'} failed`
+                    : `Saved Offline — ${pendingCount} ${pendingCount === 1 ? 'entry' : 'entries'} pending sync`
                   : !isOnline
                     ? 'Offline'
                     : failedCount > 0 && pendingCount > 0
-                      ? `${failedCount} failed, ${pendingCount} pending`
+                      ? `${failedCount} ${failedCount === 1 ? 'entry' : 'entries'} failed; ${pendingCount} ${pendingCount === 1 ? 'entry' : 'entries'} pending sync`
                       : failedCount > 0
                         ? `${failedCount} ${failedCount === 1 ? 'entry' : 'entries'} failed`
                         : `${pendingCount} ${pendingCount === 1 ? 'entry' : 'entries'} pending sync`}

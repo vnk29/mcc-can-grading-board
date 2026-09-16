@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, use } from 'react'
 import { useRouter } from 'next/navigation'
-import { Loader2, ArrowLeft, ArrowRight, CheckCircle2, XCircle, AlertTriangle, AlertCircle, FileEdit, User } from 'lucide-react'
+import { Loader2, ArrowLeft, ArrowRight, CheckCircle2, XCircle, AlertTriangle, AlertCircle, FileEdit, User, WifiOff } from 'lucide-react'
 import { format } from 'date-fns'
 
 import { supabase } from '@/lib/supabase'
@@ -32,6 +32,7 @@ export default function RecordDetailPage({
   const [error, setError] = useState<string | null>(null)
   
   const [record, setRecord] = useState<CanTestWithDetails | null>(null)
+  const [isOfflineRecord, setIsOfflineRecord] = useState(false)
   const [corrections, setCorrections] = useState<CorrectionWithOperator[]>([])
   const [operators, setOperators] = useState<{ id: string; name: string }[]>([])
 
@@ -76,13 +77,56 @@ export default function RecordDetailPage({
         .returns<CanTestWithDetails>()
 
       if (dbError) throw dbError
-      if (!dbData) {
-        setError('Record not found. It may be invalid or not yet synced.')
-        return
+      if (dbError) throw dbError
+      
+      let canTest = dbData
+      let isOffline = false
+
+      if (!canTest) {
+        // Fallback to offline queue
+        const { getPendingEntries } = await import('@/lib/offlineQueue')
+        const pending = await getPendingEntries()
+        const offlineEntry = pending.find(e => e.referenceCode === referenceCode)
+        if (offlineEntry) {
+          isOffline = true
+          // Map offline entry to CanTestWithDetails shape
+          canTest = {
+            id: offlineEntry.id,
+            farmer_id: offlineEntry.farmerId,
+            operator_id: offlineEntry.operatorId,
+            can_volume: offlineEntry.canVolume || 0,
+            fat_percent: offlineEntry.fatPercent,
+            snf_percent: offlineEntry.snfPercent,
+            temperature: offlineEntry.temperatureC,
+            adulteration_result: offlineEntry.adulterationPositive,
+            auto_decision: offlineEntry.autoDecision,
+            decision: offlineEntry.finalDecision,
+            is_borderline: offlineEntry.isBorderline,
+            borderline_flags: offlineEntry.borderlineFlags,
+            reason_codes: offlineEntry.reasonCodes,
+            is_override: offlineEntry.isOverride,
+            override_reason: offlineEntry.overrideReason || null,
+            reference_code: offlineEntry.referenceCode,
+            photo_url: offlineEntry.photoUrl || null,
+            test_performed_at: offlineEntry.testPerformedAt,
+            created_at: offlineEntry.testPerformedAt,
+            farmer: {
+              name: offlineEntry.farmerName,
+              phone: null,
+              village: null,
+            },
+            operator: {
+              name: offlineEntry.operatorName,
+            }
+          } as unknown as CanTestWithDetails
+        } else {
+          setError('Record not found. It may be invalid or not yet synced.')
+          return
+        }
       }
 
-      const canTest = dbData
       setRecord(canTest)
+      setIsOfflineRecord(isOffline)
 
       // 2. Fetch corrections
       const { data: corrData, error: corrError } = await supabase
@@ -290,6 +334,18 @@ export default function RecordDetailPage({
 
       <div className="max-w-2xl mx-auto p-4 sm:p-6 space-y-6">
         
+        {isOfflineRecord && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-start gap-3">
+            <WifiOff className="w-5 h-5 text-amber-600 mt-0.5 shrink-0" />
+            <div>
+              <h3 className="font-bold text-amber-900">Saved Offline — Pending Sync</h3>
+              <p className="text-sm text-amber-800 mt-1">
+                This record is stored securely on your device but hasn&apos;t reached the server yet. Amendments are disabled until it syncs.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Trust Label */}
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-start gap-3">
           <AlertCircle className="w-5 h-5 text-blue-600 mt-0.5 shrink-0" />
@@ -438,13 +494,14 @@ export default function RecordDetailPage({
           </CardContent>
         </Card>
 
-        {/* Corrections Timeline */}
-        <div className="mt-8">
+         <div className="mt-8">
            <div className="flex items-center justify-between mb-4">
              <h3 className="font-bold text-lg text-slate-900">Amendment History</h3>
-             <Button variant="outline" size="sm" onClick={handleOpenCorrection} className="font-bold">
-               <FileEdit className="w-4 h-4 mr-2" /> Request Correction
-             </Button>
+             {!isOfflineRecord && (
+               <Button variant="outline" size="sm" onClick={handleOpenCorrection} className="font-bold">
+                 <FileEdit className="w-4 h-4 mr-2" /> Request Correction
+               </Button>
+             )}
            </div>
            
            {corrections.length === 0 ? (
