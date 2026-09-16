@@ -9,6 +9,7 @@ import { supabase } from '@/lib/supabase'
 import { enqueueEntry } from '@/lib/offlineQueue'
 import { evaluateCanTest, mapToDbInsert, REASON_LABELS, type CanTestAppEntry } from '@/lib/grading'
 import type { OperatorRow, FarmerRow, CanDecision, DbReasonCode } from '@/types/database'
+import type { CanTestEntry } from '@/types/index'
 
 import { Button, buttonVariants } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -111,7 +112,7 @@ export default function IntakePage() {
     if (op && pinInput.trim().length > 0) {
       setActiveOperator(op)
       sessionStorage.setItem('active_operator_id', op.id)
-      sessionStorage.setItem('active_operator_pin', pinInput)
+      // PIN is NO LONGER stored in sessionStorage
       setShowPinDialog(false)
     } else {
       setPinError('PIN is required')
@@ -177,47 +178,91 @@ export default function IntakePage() {
     setIsSubmitting(true)
     setSubmitError(null)
 
+    // ── 1. Generate identity ONCE ────────────────────────────────────────────
+    const entryId = uuidv4()
+    
+    const finalReasonCodes = [...evaluation.reasonCodes.filter(c => !c.startsWith('INVALID_'))] as DbReasonCode[]
+    if (isOverride) {
+      finalReasonCodes.push('OPERATOR_OVERRIDE')
+    }
+
+    const farmerName = farmers.find(f => f.id === farmerId)?.name || 'Unknown'
+    const operatorName = activeOperator!.name
+
+    // ── 2. Build the app entry ONCE ──────────────────────────────────────────
+    const appEntry: CanTestAppEntry = {
+      id: entryId,
+      farmerId,
+      operatorId: activeOperator!.id,
+      canVolume: parseFloat(canVolume),
+      fatPercent: parseFloat(fatPercent),
+      snfPercent: parseFloat(snfPercent),
+      temperatureC: parseFloat(temperatureC),
+      adulterationPositive: adulterationResult === 'fail',
+      autoDecision: evaluation.decision,
+      decision: finalDecision,
+      isBorderline: evaluation.isBorderline,
+      borderlineFlags: evaluation.borderlineFlags as DbReasonCode[],
+      reasonCodes: finalReasonCodes,
+      isOverride,
+      overrideReason: isOverride ? overrideReason.trim() : null,
+      referenceCode: stableAudit.refCode,
+      photoUrl: null,
+      testPerformedAt: stableAudit.testPerformedAt
+    }
+
+    // ── 3. Build the offline queue entry (same identity) ─────────────────────
+    const queueEntry: CanTestEntry = {
+      id: entryId,
+      farmerId,
+      farmerName,
+      operatorId: activeOperator!.id,
+      operatorName,
+      canVolume: parseFloat(canVolume),
+      fatPercent: parseFloat(fatPercent),
+      snfPercent: parseFloat(snfPercent),
+      temperatureC: parseFloat(temperatureC),
+      adulterationPositive: adulterationResult === 'fail',
+      reasonCodes: finalReasonCodes,
+      autoDecision: evaluation.decision,
+      finalDecision,
+      isBorderline: evaluation.isBorderline,
+      borderlineFlags: evaluation.borderlineFlags as DbReasonCode[],
+      isOverride,
+      overrideReason: isOverride ? overrideReason.trim() : undefined,
+      referenceCode: stableAudit.refCode,
+      testPerformedAt: stableAudit.testPerformedAt,
+      syncStatus: 'pending',
+      queuedAt: new Date().toISOString(),
+    }
+
+    // ── 4. If offline, go straight to queue ──────────────────────────────────
+    if (!navigator.onLine) {
+      console.warn('Device offline, queuing entry:', entryId)
+      try {
+        await enqueueEntry(queueEntry)
+        router.push(`/result/${stableAudit.refCode}`)
+      } catch (err) {
+        console.error('Failed to write to IndexedDB:', err)
+        setSubmitError('Failed to save offline. Your device storage might be full or disabled.')
+      } finally {
+        setIsSubmitting(false)
+        submitLock.current = false
+      }
+      return
+    }
+
+    // ── 5. Attempt Supabase insert ───────────────────────────────────────────
     try {
-      const entryId = uuidv4()
-      
-      const finalReasonCodes = [...evaluation.reasonCodes.filter(c => !c.startsWith('INVALID_'))] as DbReasonCode[]
-      if (isOverride) {
-        finalReasonCodes.push('OPERATOR_OVERRIDE')
-      }
-
-      const appEntry: CanTestAppEntry = {
-        id: entryId,
-        farmerId,
-        operatorId: activeOperator!.id,
-        canVolume: parseFloat(canVolume),
-        fatPercent: parseFloat(fatPercent),
-        snfPercent: parseFloat(snfPercent),
-        temperatureC: parseFloat(temperatureC),
-        adulterationPositive: adulterationResult === 'fail',
-        autoDecision: evaluation.decision,
-        decision: finalDecision,
-        isBorderline: evaluation.isBorderline,
-        borderlineFlags: evaluation.borderlineFlags as DbReasonCode[],
-        reasonCodes: finalReasonCodes,
-        isOverride,
-        overrideReason: isOverride ? overrideReason.trim() : null,
-        referenceCode: stableAudit.refCode,
-        photoUrl: null,
-        testPerformedAt: stableAudit.testPerformedAt
-      }
-
       const dbInsert = mapToDbInsert(appEntry)
-
-      // Attempt Supabase insert.
       const { error } = await supabase.from('can_tests').insert(dbInsert)
       
       if (error) {
-        // Explicit DB Error Classification
         if (error.code === '23505') {
-           // Idempotent success - already exists
+           // Idempotent success — record already exists
            console.log('Record already exists (idempotent success)')
         } else {
-           // Any other DB/RLS/Validation error -> hard fail, keep form state
+           // Any other DB/RLS/Validation error → hard fail, keep form state
            throw error
         }
       }
@@ -228,48 +273,24 @@ export default function IntakePage() {
     } catch (err: unknown) {
       console.error(err)
       
-      // If it's a TypeError (fetch failed) or has no Postgres code, it's a network/transport error
-      const isNetworkError = err instanceof TypeError || (err instanceof Error && err.message.includes('fetch')) || (typeof err === 'object' && err !== null && !('code' in err))
+      // Classify: network/transport error → queue offline
+      const isTransportError = err instanceof TypeError
+        || (err instanceof Error && err.message.includes('fetch'))
+        || (typeof err === 'object' && err !== null && !('code' in err))
       
-      if (isNetworkError) {
+      if (isTransportError) {
          console.warn('Network/Transport error detected, queuing offline:', err)
-         
-         const finalReasonCodes = [...evaluation.reasonCodes.filter(c => !c.startsWith('INVALID_'))] as DbReasonCode[]
-         if (isOverride) finalReasonCodes.push('OPERATOR_OVERRIDE')
-         
-         const entryId = uuidv4()
-         const farmerName = farmers.find(f => f.id === farmerId)?.name || 'Unknown'
-         const operatorName = activeOperator!.name
-         
-         await enqueueEntry({
-           id: entryId,
-           farmerId,
-           operatorId: activeOperator!.id,
-           canVolume: parseFloat(canVolume),
-           fatPercent: parseFloat(fatPercent),
-           snfPercent: parseFloat(snfPercent),
-           temperatureC: parseFloat(temperatureC),
-           adulterationPositive: adulterationResult === 'fail',
-           reasonCodes: finalReasonCodes,
-           isOverride,
-           overrideReason: isOverride ? overrideReason.trim() : undefined,
-           referenceCode: stableAudit!.refCode,
-           photoUrl: undefined,
-           testPerformedAt: stableAudit!.testPerformedAt,
-           farmerName,
-           operatorName,
-           autoDecision: evaluation.decision,
-           finalDecision,
-           isBorderline: evaluation.isBorderline,
-           borderlineFlags: evaluation.borderlineFlags as DbReasonCode[],
-           syncStatus: 'pending'
-         })
-         
-         router.push(`/result/${stableAudit!.refCode}`)
-         return // Skip finally block to prevent form clear if we wanted to clear it, but here we just return
+         try {
+           await enqueueEntry(queueEntry)
+           router.push(`/result/${stableAudit.refCode}`)
+         } catch (queueErr) {
+           console.error('Failed to write to IndexedDB after network error:', queueErr)
+           setSubmitError('Network failed, and offline storage is unavailable. Please try again.')
+         }
+         return
       }
       
-      // Real DB Error
+      // Real DB/RLS/validation error — show to operator, do NOT queue
       if (err instanceof Error) {
         setSubmitError(err.message || 'An unknown error occurred')
       } else if (typeof err === 'object' && err !== null && 'message' in err) {

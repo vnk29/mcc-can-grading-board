@@ -41,6 +41,7 @@ export default function RecordDetailPage({
   
   // Correction Form Values
   const [activeOperatorId, setActiveOperatorId] = useState<string>('')
+  const [activePin, setActivePin] = useState<string>('')
   const [showPinDialog, setShowPinDialog] = useState(false)
   const [pinInput, setPinInput] = useState('')
   const [pinError, setPinError] = useState('')
@@ -71,6 +72,7 @@ export default function RecordDetailPage({
         `)
         .eq('reference_code', referenceCode)
         .maybeSingle()
+        .returns<CanTestWithDetails>()
 
       if (dbError) throw dbError
       if (!dbData) {
@@ -78,7 +80,7 @@ export default function RecordDetailPage({
         return
       }
 
-      const canTest = dbData as unknown as CanTestWithDetails
+      const canTest = dbData
       setRecord(canTest)
 
       // 2. Fetch corrections
@@ -90,9 +92,10 @@ export default function RecordDetailPage({
         `)
         .eq('can_test_id', canTest.id)
         .order('created_at', { ascending: true })
+        .returns<CorrectionWithOperator[]>()
 
       if (corrError) throw corrError
-      setCorrections((corrData || []) as unknown as CorrectionWithOperator[])
+      setCorrections(corrData || [])
 
       // 3. Fetch operators for the correction auth
       const { data: opsData } = await supabase.from('operators').select('id, name').order('name')
@@ -115,7 +118,7 @@ export default function RecordDetailPage({
   }
 
   const handleOpenCorrection = () => {
-    if (!activeOperatorId) {
+    if (!activeOperatorId || !activePin) {
       setShowPinDialog(true)
       return
     }
@@ -138,11 +141,22 @@ export default function RecordDetailPage({
     // The actual PIN verification happens inside the secure RPC on submit.
     if (pinInput.trim().length > 0) {
       sessionStorage.setItem('active_operator_id', activeOperatorId)
-      sessionStorage.setItem('active_operator_pin', pinInput)
+      setActivePin(pinInput) // Store securely in component memory
       setShowPinDialog(false)
       setPinInput('')
       setPinError('')
-      handleOpenCorrection()
+      
+      // Open the correction form directly since state updates are asynchronous
+      if (record) {
+        setNewVolume(record.can_volume?.toString() || '')
+        setNewFat(record.fat_percent?.toString() || '')
+        setNewSnf(record.snf_percent?.toString() || '')
+        setNewTemp(record.temperature?.toString() || '')
+        setNewDecision(record.decision)
+      }
+      setCorrectionReason('')
+      setCorrectionError(null)
+      setShowCorrectionModal(true)
     } else {
       setPinError('PIN is required')
     }
@@ -187,7 +201,11 @@ export default function RecordDetailPage({
         return
       }
 
-      const activePin = sessionStorage.getItem('active_operator_pin') || ''
+      if (!activePin) {
+        setCorrectionError('Operator PIN is missing. Please re-authenticate.')
+        setIsSubmittingCorrection(false)
+        return
+      }
 
       const { error } = await supabase.rpc('submit_correction', {
         p_operator_id: activeOperatorId,
@@ -204,9 +222,15 @@ export default function RecordDetailPage({
       // Refresh to see amendment
       await fetchData()
 
-    } catch (err) {
+    } catch (err: unknown) {
       console.error(err)
-      setCorrectionError('Failed to save correction. Please try again.')
+      const errorMsg = err instanceof Error ? err.message : String(err)
+      if (errorMsg.toLowerCase().includes('unauthorized')) {
+        setCorrectionError('Invalid Operator PIN. Please try again.')
+        setActivePin('') // Clear invalid PIN to prompt re-entry next time
+      } else {
+        setCorrectionError('Failed to save correction. Please try again.')
+      }
     } finally {
       setIsSubmittingCorrection(false)
     }

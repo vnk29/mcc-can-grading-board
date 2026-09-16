@@ -63,10 +63,11 @@ export default function RejectionSlipPage({ params }: { params: Promise<{ refere
           `)
           .eq('reference_code', referenceCode)
           .maybeSingle()
+          .returns<CanTestWithDetails>()
 
         if (dbData) {
           // It's a CanTestRow with joined relations
-          const joinedData = dbData as unknown as CanTestWithDetails
+          const joinedData = dbData
           
           setRecord({
             referenceCode: joinedData.reference_code,

@@ -82,12 +82,12 @@ export default function LookupSearchPage() {
         query = query.lte('test_performed_at', end.toISOString())
       }
 
-      const { data, error: dbError } = await query
+      const { data, error: dbError } = await query.returns<CanTestWithDetails[]>()
 
       if (dbError) throw dbError
 
-      // Supabase typing for joins requires casting
-      setResults((data || []) as unknown as CanTestWithDetails[])
+      // Data is typed via .returns()
+      setResults(data || [])
 
     } catch (err) {
       console.error('Search error:', err)

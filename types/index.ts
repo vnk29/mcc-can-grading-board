@@ -106,6 +106,9 @@ export interface CanTestEntry {
   /** Client-side sync state — NOT stored in Postgres. */
   syncStatus: 'pending' | 'synced' | 'failed'
 
+  /** ISO timestamp of when the entry was enqueued locally. Used for sort order during sync. */
+  queuedAt: string
+
   /** Device/session metadata for audit trail. */
   deviceInfo?: string
 }

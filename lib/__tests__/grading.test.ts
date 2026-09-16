@@ -155,7 +155,7 @@ test('13. Missing temperature (undefined) → INVALID_TEMPERATURE', () => {
 })
 
 test('14. Non-boolean adulteration value (null) → INVALID_ADULTERATION_RESULT', () => {
-  const r = evaluateCanTest({ ...GOOD, adulterationPositive: null as unknown as boolean })
+  const r = evaluateCanTest({ ...GOOD, adulterationPositive: null })
   assert('INVALID_ADULTERATION_RESULT in reasonCodes', r.reasonCodes.includes('INVALID_ADULTERATION_RESULT'))
   assert('hasInvalidReadings is true', r.hasInvalidReadings)
 })

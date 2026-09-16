@@ -139,7 +139,7 @@ export default function ResultPage({ params }: { params: Promise<{ reference: st
         {isOffline && (
           <div className="p-3 bg-amber-50 text-amber-800 border border-amber-200 rounded-lg text-sm font-medium flex items-center gap-2 shadow-sm">
             <AlertTriangle className="w-5 h-5 shrink-0" />
-            Saved offline — pending sync
+            <span>Saved locally — this record will sync automatically when connectivity is restored.</span>
           </div>
         )}
 
