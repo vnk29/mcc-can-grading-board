@@ -427,11 +427,9 @@ export default function IntakePage() {
             <p className="text-sm text-slate-500 font-medium">Op: {activeOperator.name}</p>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" asChild className="text-slate-700">
-              <Link href="/lookup">
-                <ClipboardList className="w-4 h-4 mr-1 sm:mr-2" /> 
-                <span className="hidden sm:inline">Records</span>
-              </Link>
+            <Button variant="outline" size="sm" onClick={() => router.push('/lookup')} className="text-slate-700">
+              <ClipboardList className="w-4 h-4 mr-1 sm:mr-2" /> 
+              <span className="hidden sm:inline">Records</span>
             </Button>
             <Button variant="ghost" size="sm" onClick={handleLogout} className="text-slate-500 px-2 sm:px-3">
               <LogOut className="w-4 h-4 sm:mr-2" /> 
