@@ -53,7 +53,11 @@ export async function getPendingEntries(): Promise<CanTestEntry[]> {
   const entries = await Promise.all(queueKeys.map((k) => get<CanTestEntry>(k)))
   return entries
     .filter((e): e is CanTestEntry => e !== undefined)
-    .sort((a, b) => a.queuedAt.localeCompare(b.queuedAt))
+    .sort((a, b) => {
+      const timeA = a.queuedAt || a.testPerformedAt || ''
+      const timeB = b.queuedAt || b.testPerformedAt || ''
+      return timeA.localeCompare(timeB)
+    })
 }
 
 /** Remove a successfully synced entry from the queue. */

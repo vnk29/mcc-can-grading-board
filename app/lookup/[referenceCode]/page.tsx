@@ -224,8 +224,21 @@ export default function RecordDetailPage({
 
     } catch (err: unknown) {
       console.error(err)
-      const errorMsg = err instanceof Error ? err.message : String(err)
-      if (errorMsg.toLowerCase().includes('unauthorized')) {
+      const errObj = typeof err === 'object' && err !== null ? err : {}
+      const errorCode = 'code' in errObj ? String((errObj as { code: unknown }).code) : ''
+      const errorStatus = 'status' in errObj ? Number((errObj as { status: unknown }).status) : 0
+
+      const errObjMessage = 'message' in errObj ? String((errObj as { message: unknown }).message) : ''
+      const errorMsg = errObjMessage || (err instanceof Error ? err.message : String(err))
+
+      const isUnauthorized =
+        errorStatus === 401 ||
+        errorStatus === 403 ||
+        errorCode === '42501' || // Insufficient privilege
+        (errorCode === 'P0001' && errorMsg.toLowerCase().includes('unauthorized')) ||
+        errorMsg.toLowerCase().includes('unauthorized')
+
+      if (isUnauthorized) {
         setCorrectionError('Invalid Operator PIN. Please try again.')
         setActivePin('') // Clear invalid PIN to prompt re-entry next time
       } else {

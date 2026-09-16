@@ -33,7 +33,7 @@ export function SyncStatusBar() {
   // When everything is fine, show a minimal indicator
   if (!hasIssues) {
     return (
-      <div className="fixed bottom-0 left-0 right-0 z-50 pointer-events-none">
+      <div className="fixed bottom-[88px] left-0 right-0 z-50 pointer-events-none sm:bottom-0">
         <div className="max-w-2xl mx-auto px-4 pb-2">
           <div className="flex items-center gap-1.5 text-xs text-emerald-600 font-medium opacity-60">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
@@ -45,7 +45,7 @@ export function SyncStatusBar() {
   }
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50">
+    <div className="fixed bottom-[88px] left-0 right-0 z-50 sm:bottom-0">
       <div className="max-w-2xl mx-auto px-4 pb-3">
         <div
           className={cn(
