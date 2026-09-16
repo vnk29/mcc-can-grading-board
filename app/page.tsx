@@ -4,7 +4,6 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { v4 as uuidv4 } from 'uuid'
 import { CheckCircle2, AlertTriangle, XCircle, Search, Save, Check, LogOut, AlertCircle, Loader2, ClipboardList } from 'lucide-react'
-import Link from 'next/link'
 
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
 import { enqueueEntry } from '@/lib/offlineQueue'
