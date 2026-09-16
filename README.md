@@ -82,7 +82,7 @@ Every record carries two timestamps:
 
 ## UX trade-offs
 
-- **Operator "login" is name + any non-empty PIN.** The `operators` table is read-only via RLS; PINs are never sent to the browser. Real PIN verification happens only inside the server-side `submit_correction` RPC. This keeps shift-start frictionless while keeping corrections secure. Trade-off: operator identity at intake is trust-based, which is acceptable for a single-booth prototype but would need real auth for multi-operator centers.
+- **Operator "login" is name + any non-empty PIN entered in the browser.** The PIN is typed at the client, then sent only when the operator submits a correction through the secure `submit_correction` RPC. The RPC verifies the operator ID + PIN server-side against the `operators` table; the PIN is not persisted on the record, in the correction payload, or in browser storage beyond the active form session. This keeps intake lightweight while preserving server-side authorization for corrections. Trade-off: operator identity at intake is trust-based, which is acceptable for a single-booth prototype but would need real auth for multi-operator centers.
 - **Large touch targets, numeric keypads, minimal free-text.** The intake form is optimized for a standing operator with a queue, not a desk worker. Volume/temp/fat/SNF use centered numeric inputs; adulteration is a two-button PASS/FAIL toggle.
 - **Rejection slip is generated in-flow, no extra screen.** A rejected can routes straight to a shareable slip (PNG via `html-to-image`, with a QR code linking to the dispute view). The farmer gets concrete proof in the same gesture as the decision.
 - **Borderline is flagged, not auto-decided.** A reading near a threshold shows an amber "Review" state with the specific near-limit measurement called out, rather than silently accepting or rejecting.
@@ -128,7 +128,6 @@ components/
   ui/                         # 12 hand-rolled primitives
 lib/
   grading.ts                  # Canonical grading engine + mapToDbInsert
-  gradingLogic.ts             # @deprecated re-export (do not use)
   config.ts                   # Quality thresholds
   offlineQueue.ts             # IndexedDB queue + sync engine
   supabase.ts                 # Typed Supabase client
@@ -152,6 +151,38 @@ Tests use a lightweight `tsx`-based harness (no jest/vitest dependency). Run all
 - `lib/__tests__/offlineQueue.test.ts` — queue helpers: `isNetworkError` classification, `toAppEntry` mapping
 
 The sync engine itself (`syncPendingEntries`) requires a live Supabase instance and is not covered by unit tests.
+
+---
+
+## Deployment (Vercel)
+
+### 1. Create a Supabase project
+1. Go to [app.supabase.com](https://app.supabase.com) and create a new project.
+2. From **Project Settings → API**, copy:
+   - **Project URL** → `NEXT_PUBLIC_SUPABASE_URL`
+   - **anon / public key** → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+
+### 2. Run migrations
+In the Supabase **SQL Editor**, run each migration file in order:
+```sql
+-- Paste and run each file in turn:
+supabase/migrations/001_initial_schema.sql
+supabase/migrations/002_security_fixes.sql
+supabase/migrations/003_security_fixes.sql
+```
+Optionally load demo data: `supabase/seed.sql`
+
+### 3. Deploy to Vercel
+1. Push this repository to GitHub/GitLab/Bitbucket.
+2. Import the repo in [vercel.com/new](https://vercel.com/new).
+3. Add **Environment Variables** in the Vercel project settings:
+   | Key | Value |
+   |-----|-------|
+   | `NEXT_PUBLIC_SUPABASE_URL` | `https://your-project-ref.supabase.co` |
+   | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | your anon key |
+4. Deploy. Vercel auto-detects Next.js — no `vercel.json` required.
+
+> **Never add the Supabase service-role key to Vercel environment variables** unless you are writing server-only API routes that explicitly need it. This app uses only the anon key.
 
 ---
 
