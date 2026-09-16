@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Skeleton } from '@/components/ui/skeleton'
 import type { CanTestWithDetails } from '@/types/database'
 import { cn } from '@/lib/utils'
 
@@ -140,7 +141,7 @@ export default function LookupSearchPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <Label htmlFor="startDate" className="text-sm font-semibold">Start Date</Label>
                   <div className="relative">
@@ -174,6 +175,7 @@ export default function LookupSearchPage() {
                   type="button" 
                   variant="outline" 
                   onClick={clearFilters}
+                  aria-label="Clear filters"
                   className="h-12 px-4 shrink-0"
                   disabled={!searchQuery && !startDate && !endDate}
                 >
@@ -206,9 +208,18 @@ export default function LookupSearchPage() {
           )}
 
           {isSearching && !results.length && (
-            <div className="py-12 flex flex-col items-center justify-center text-slate-400">
-               <Loader2 className="w-8 h-8 animate-spin mb-4" />
-               <p className="font-medium">Searching records...</p>
+            <div className="space-y-4 pt-2">
+              <Skeleton className="w-full h-[104px] rounded-xl" />
+              <Skeleton className="w-full h-[104px] rounded-xl" />
+              <Skeleton className="w-full h-[104px] rounded-xl" />
+            </div>
+          )}
+
+          {!hasSearched && !isSearching && !error && (
+            <div className="py-12 flex flex-col items-center justify-center text-slate-400 bg-white rounded-xl border border-dashed border-slate-200">
+               <Search className="w-10 h-10 mb-3 opacity-20" />
+               <p className="font-semibold text-lg text-slate-600">Search for records</p>
+               <p className="text-sm">Enter a farmer name, reference code, or date range.</p>
             </div>
           )}
 

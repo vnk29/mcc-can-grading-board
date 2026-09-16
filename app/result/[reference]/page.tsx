@@ -2,7 +2,7 @@
 
 import { useEffect, useState, use } from 'react'
 import { useRouter } from 'next/navigation'
-import { CheckCircle2, AlertTriangle, XCircle, ArrowLeft, Loader2, AlertCircle } from 'lucide-react'
+import { CheckCircle2, AlertTriangle, XCircle, ArrowLeft, Loader2, AlertCircle, Share2 } from 'lucide-react'
 
 import { supabase } from '@/lib/supabase'
 import { getPendingEntries } from '@/lib/offlineQueue'
@@ -139,7 +139,7 @@ export default function ResultPage({ params }: { params: Promise<{ reference: st
         {isOffline && (
           <div className="p-3 bg-amber-50 text-amber-800 border border-amber-200 rounded-lg text-sm font-medium flex items-center gap-2 shadow-sm">
             <AlertTriangle className="w-5 h-5 shrink-0" />
-            <span>Saved locally — this record will sync automatically when connectivity is restored.</span>
+            <span>Saved Offline — Pending Sync</span>
           </div>
         )}
 
@@ -159,9 +159,9 @@ export default function ResultPage({ params }: { params: Promise<{ reference: st
             
             <h1 className="text-3xl font-black tracking-tight mb-2 uppercase">
               {isOverride 
-                ? `${finalDecision} (OVERRIDE)`
+                ? `${finalDecision} — OVERRIDE`
                 : isBorderline
-                  ? `${finalDecision} - BORDERLINE - REVIEW`
+                  ? `${finalDecision} — BORDERLINE`
                   : finalDecision
               }
             </h1>
@@ -201,6 +201,15 @@ export default function ResultPage({ params }: { params: Promise<{ reference: st
           </CardContent>
         </Card>
 
+        {finalDecision === 'rejected' && (
+          <Button
+            onClick={() => router.push(`/slip/${record.referenceCode}`)}
+            className="w-full h-16 text-xl font-bold shadow-sm"
+            size="lg"
+          >
+            <Share2 className="w-6 h-6 mr-2" /> Share Rejection Slip
+          </Button>
+        )}
         <Button 
           onClick={() => router.push('/')} 
           className="w-full h-16 text-xl font-bold shadow-sm"

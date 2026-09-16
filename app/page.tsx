@@ -21,6 +21,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog'
+import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 
 export default function IntakePage() {
@@ -157,7 +158,7 @@ export default function IntakePage() {
   useEffect(() => {
     if (hasValidReadings && !stableAudit) {
       const now = new Date()
-      const refCode = `MCC-${now.getFullYear()}${String(now.getMonth()+1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${Math.random().toString(36).substring(2,6).toUpperCase()}`
+      const refCode = `MCC-${now.getFullYear()}${String(now.getMonth()+1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${Math.random().toString(36).substring(2,10).toUpperCase()}`
       setStableAudit({ refCode, testPerformedAt: now.toISOString() })
     } else if (!hasValidReadings && stableAudit) {
       // If they go back and change a raw reading or farmer, it's a new test conceptually
@@ -260,7 +261,6 @@ export default function IntakePage() {
       if (error) {
         if (error.code === '23505') {
            // Idempotent success — record already exists
-           console.log('Record already exists (idempotent success)')
         } else {
            // Any other DB/RLS/Validation error → hard fail, keep form state
            throw error
@@ -308,10 +308,11 @@ export default function IntakePage() {
 
   if (isLoadingData) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="text-center space-y-4">
-          <Loader2 className="w-8 h-8 animate-spin mx-auto text-slate-400" />
-          <p className="text-slate-500 font-medium">Loading system data...</p>
+      <div className="min-h-screen bg-slate-50 p-4 md:p-6 pb-36">
+        <div className="max-w-2xl mx-auto space-y-4 md:space-y-6">
+          <Skeleton className="w-full h-16 sm:h-20 rounded-xl" />
+          <Skeleton className="w-full h-64 sm:h-80 rounded-xl" />
+          <Skeleton className="w-full h-40 sm:h-48 rounded-xl" />
         </div>
       </div>
     )
@@ -388,7 +389,7 @@ export default function IntakePage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 p-3 pb-24 sm:p-6">
+    <div className="min-h-screen bg-slate-50 p-3 pb-36 sm:p-6 sm:pb-8">
       <div className="mx-auto max-w-2xl space-y-4 sm:space-y-6">
         
         {/* Header / Active Operator */}
@@ -473,11 +474,13 @@ export default function IntakePage() {
               <div className="grid grid-cols-2 gap-3 sm:gap-6">
                 <div className="space-y-1.5">
                   <Label htmlFor="volume" className="text-sm sm:text-base font-semibold text-slate-700">Volume (L)</Label>
-                  <Input
+                  <Input 
                     id="volume"
-                    type="number"
-                    step="0.1"
-                    placeholder="0.0"
+                    type="number" 
+                    step="0.1" 
+                    min="0"
+                    max="100"
+                    placeholder="0.0" 
                     className="h-14 sm:h-16 text-xl sm:text-2xl text-center bg-slate-50 font-medium"
                     value={canVolume}
                     onChange={(e) => setCanVolume(e.target.value)}
@@ -486,11 +489,13 @@ export default function IntakePage() {
                 
                 <div className="space-y-1.5">
                   <Label htmlFor="temp" className="text-sm sm:text-base font-semibold text-slate-700">Temp (°C)</Label>
-                  <Input
+                  <Input 
                     id="temp"
-                    type="number"
-                    step="0.1"
-                    placeholder="0.0"
+                    type="number" 
+                    step="0.1" 
+                    min="0"
+                    max="50"
+                    placeholder="0.0" 
                     className="h-14 sm:h-16 text-xl sm:text-2xl text-center bg-slate-50 font-medium"
                     value={temperatureC}
                     onChange={(e) => setTemperatureC(e.target.value)}
@@ -503,7 +508,9 @@ export default function IntakePage() {
                     id="fat"
                     type="number"
                     step="0.01"
-                    placeholder="0.00"
+                    min="0"
+                    max="15"
+                    placeholder="0.0"
                     className="h-14 sm:h-16 text-xl sm:text-2xl text-center bg-slate-50 font-medium"
                     value={fatPercent}
                     onChange={(e) => setFatPercent(e.target.value)}
@@ -516,7 +523,9 @@ export default function IntakePage() {
                     id="snf"
                     type="number"
                     step="0.01"
-                    placeholder="0.00"
+                    min="0"
+                    max="15"
+                    placeholder="0.0"
                     className="h-14 sm:h-16 text-xl sm:text-2xl text-center bg-slate-50 font-medium"
                     value={snfPercent}
                     onChange={(e) => setSnfPercent(e.target.value)}

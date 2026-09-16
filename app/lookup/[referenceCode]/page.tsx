@@ -11,6 +11,7 @@ import { MIN_FAT_PERCENT, MIN_SNF_PERCENT, MAX_TEMPERATURE_C } from '@/lib/confi
 import type { CanTestWithDetails, CorrectionWithOperator } from '@/types/database'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -211,7 +212,6 @@ export default function RecordDetailPage({
         p_operator_id: activeOperatorId,
         p_pin: activePin,
         p_can_test_id: record.id,
-        p_old_values: oldValues,
         p_new_values: newValues,
         p_reason: correctionReason.trim()
       })
@@ -251,8 +251,13 @@ export default function RecordDetailPage({
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <Loader2 className="w-8 h-8 animate-spin text-slate-400" />
+      <div className="min-h-screen bg-slate-50 pb-24">
+        <div className="bg-white border-b h-16"></div>
+        <div className="max-w-2xl mx-auto p-4 sm:p-6 space-y-6">
+          <Skeleton className="w-full h-24 rounded-lg" />
+          <Skeleton className="w-full h-80 rounded-xl" />
+          <Skeleton className="w-full h-40 rounded-xl" />
+        </div>
       </div>
     )
   }
@@ -443,8 +448,10 @@ export default function RecordDetailPage({
            </div>
            
            {corrections.length === 0 ? (
-             <div className="p-6 text-center border border-dashed border-slate-300 rounded-xl bg-slate-50 text-slate-500 font-medium text-sm">
-               Original record — no amendments
+             <div className="p-8 text-center border-2 border-dashed border-slate-200 rounded-xl bg-white text-slate-500">
+               <FileEdit className="w-8 h-8 mx-auto mb-3 opacity-20" />
+               <p className="font-semibold text-slate-700">No amendments</p>
+               <p className="text-sm mt-1">This original record has not been corrected.</p>
              </div>
            ) : (
              <div className="space-y-4">

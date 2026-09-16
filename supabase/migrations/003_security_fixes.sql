@@ -24,47 +24,85 @@ COMMENT ON COLUMN can_tests.borderline_flags IS
 DROP POLICY IF EXISTS "corrections_insert" ON corrections;
 
 -- Create the secure RPC for submitting corrections
-CREATE OR REPLACE FUNCTION submit_correction(
+CREATE OR REPLACE FUNCTION public.submit_correction(
   p_operator_id UUID,
   p_pin TEXT,
   p_can_test_id UUID,
-  p_old_values JSONB,
   p_new_values JSONB,
   p_reason TEXT
 ) 
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER -- Runs with privileges of the creator (bypassing RLS for the insert)
+SET search_path = public, pg_temp
 AS $$
 DECLARE
   v_isValid BOOLEAN;
   v_correction_id UUID;
+  v_old_values JSONB;
 BEGIN
   -- 1. Validate Operator Identity & PIN
   SELECT EXISTS(
-    SELECT 1 FROM operators WHERE id = p_operator_id AND pin = p_pin
+    SELECT 1 FROM public.operators WHERE id = p_operator_id AND pin = p_pin
   ) INTO v_isValid;
 
   IF NOT v_isValid THEN
     RAISE EXCEPTION 'Unauthorized: Invalid operator ID or PIN';
   END IF;
 
-  -- 2. Validate that the can_test exists
-  IF NOT EXISTS (SELECT 1 FROM can_tests WHERE id = p_can_test_id) THEN
+  -- 2. Validate that the can_test exists and capture old_values
+  SELECT to_jsonb(t.*) INTO v_old_values
+  FROM public.can_tests t WHERE id = p_can_test_id;
+
+  IF v_old_values IS NULL THEN
     RAISE EXCEPTION 'Invalid request: Target can test does not exist';
   END IF;
 
-  -- 3. Insert the correction (bypasses RLS due to SECURITY DEFINER)
-  INSERT INTO corrections (can_test_id, old_values, new_values, corrected_by, reason)
-  VALUES (p_can_test_id, p_old_values, p_new_values, p_operator_id, p_reason)
+  -- 3. Validate new_values keys, types, and ranges
+  -- Reject empty objects
+  IF p_new_values IS NULL OR p_new_values = '{}'::jsonb THEN
+    RAISE EXCEPTION 'Invalid request: p_new_values must not be empty';
+  END IF;
+
+  -- Expected fields for a correction are farmer_id, can_volume, and temperature.
+  -- Reject any unexpected fields.
+  IF (p_new_values - array['farmer_id', 'can_volume', 'temperature']) <> '{}'::jsonb THEN
+    RAISE EXCEPTION 'Invalid request: p_new_values contains unpermitted fields';
+  END IF;
+
+  -- Validate farmer_id type
+  IF p_new_values ? 'farmer_id' THEN
+    IF jsonb_typeof(p_new_values->'farmer_id') <> 'string' THEN
+      RAISE EXCEPTION 'Invalid request: farmer_id must be a string';
+    END IF;
+  END IF;
+
+  -- Validate can_volume type and range (> 0)
+  IF p_new_values ? 'can_volume' THEN
+    IF jsonb_typeof(p_new_values->'can_volume') <> 'number' OR (p_new_values->>'can_volume')::numeric <= 0 THEN
+      RAISE EXCEPTION 'Invalid request: can_volume must be a positive number';
+    END IF;
+  END IF;
+
+  -- Validate temperature type and range (0 to 40)
+  IF p_new_values ? 'temperature' THEN
+    IF jsonb_typeof(p_new_values->'temperature') <> 'number' OR (p_new_values->>'temperature')::numeric < 0 OR (p_new_values->>'temperature')::numeric > 40 THEN
+      RAISE EXCEPTION 'Invalid request: temperature must be a number between 0 and 40';
+    END IF;
+  END IF;
+
+  -- 4. Insert the correction (bypasses RLS due to SECURITY DEFINER)
+  INSERT INTO public.corrections (can_test_id, old_values, new_values, corrected_by, reason)
+  VALUES (p_can_test_id, v_old_values, p_new_values, p_operator_id, p_reason)
   RETURNING id INTO v_correction_id;
 
   RETURN jsonb_build_object('id', v_correction_id);
 END;
 $$;
 
-COMMENT ON FUNCTION submit_correction IS 
+COMMENT ON FUNCTION public.submit_correction IS 
   'Securely authorizes an operator via PIN and submits an immutable correction. Enforces authorization on the database side rather than trusting the client session.';
 
 -- Grant execute to authenticated and anon users (the function itself verifies the PIN)
-GRANT EXECUTE ON FUNCTION submit_correction TO authenticated, anon;
+REVOKE EXECUTE ON FUNCTION public.submit_correction FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.submit_correction TO authenticated, anon;

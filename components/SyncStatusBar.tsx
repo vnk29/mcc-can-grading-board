@@ -73,7 +73,7 @@ export function SyncStatusBar() {
               {isSyncing
                 ? 'Syncing...'
                 : !isOnline && totalQueued > 0
-                  ? `Offline — ${totalQueued} ${totalQueued === 1 ? 'entry' : 'entries'} pending sync`
+                  ? `Saved Offline — ${totalQueued} ${totalQueued === 1 ? 'entry' : 'entries'} pending sync`
                   : !isOnline
                     ? 'Offline'
                     : failedCount > 0 && pendingCount > 0

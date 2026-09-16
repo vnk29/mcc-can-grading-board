@@ -125,11 +125,16 @@ export interface SyncResult {
  * Convert a CanTestEntry (offline queue shape) to a CanTestAppEntry
  * (grading engine shape) for use with mapToDbInsert().
  */
-function toAppEntry(entry: CanTestEntry): CanTestAppEntry {
+export function toAppEntry(entry: CanTestEntry): CanTestAppEntry {
   return {
     id: entry.id,
     farmerId: entry.farmerId,
     operatorId: entry.operatorId,
+    // canVolume is optional on the queue entry but required on CanTestAppEntry.
+    // The form always sets it before enqueueing, so undefined here indicates
+    // data corruption. Falling back to 0 is a deliberate sentinel: 0 fails the
+    // grading engine's INVALID_VOLUME check, so a corrupted entry is marked
+    // failed during sync rather than silently persisted with bad data.
     canVolume: entry.canVolume ?? 0,
     fatPercent: entry.fatPercent,
     snfPercent: entry.snfPercent,
@@ -161,10 +166,10 @@ function toAppEntry(entry: CanTestEntry): CanTestAppEntry {
  *   - Validation errors (have a Postgres code)
  *   - Any error with a `code` property
  */
-function isNetworkError(err: unknown): boolean {
+export function isNetworkError(err: unknown): boolean {
   if (err instanceof TypeError) return true
   if (err instanceof Error && err.message.includes('fetch')) return true
-  if (typeof err === 'object' && err !== null && !('code' in err)) return true
+  if (typeof err === 'object' && err !== null && !(err instanceof Error) && !('code' in err)) return true
   return false
 }
 

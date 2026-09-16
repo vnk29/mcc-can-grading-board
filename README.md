@@ -1,36 +1,166 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Milk Chilling Center — Can Grading Board
+
+A booth-operator tool for grading incoming milk cans at a village dairy collection center. The operator tests each can and accepts or rejects it in under 10 seconds; every test produces an **immutable, timestamped, shareable record** that serves as a single source of truth for resolving disputes with farmers.
+
+This is a 48-hour prototype build. The product is not "a logging app" — it is a **trust layer** between the operator and the farmer.
+
+---
+
+## Problem
+
+When a can is rejected at the booth, there is no reliable, tamper-proof record of the test — only the operator's word. Disputes later in the evening become he-said/she-said with no shared evidence. This app creates an immutable record *at the moment of testing*, fast enough not to slow the line, and clear enough to end a dispute in one glance.
+
+## Users
+
+| User | Need |
+|---|---|
+| **Booth Operator** | Fastest possible entry, minimal typing, clear pass/fail feedback |
+| **Farmer** | Proof of what was tested and why it was rejected, no account needed |
+| **Supervisor** | A searchable, filterable, tamper-evident log to resolve disputes |
+
+---
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
+- Node.js 18+
+- A Supabase project (free tier works)
 
+### Install & configure
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+cp .env.local.example .env.local
+# Fill in NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY from your Supabase project settings
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Set up the database
+Run the SQL migrations in order against your Supabase Postgres:
+1. `supabase/migrations/001_initial_schema.sql` — tables, RLS, immutability policies
+2. `supabase/migrations/002_security_fixes.sql` — `auto_decision`, `is_borderline`
+3. `supabase/migrations/003_security_fixes.sql` — `borderline_flags`, secure correction RPC
+4. `supabase/seed.sql` — 2 operators, 5 farmers, 10 sample can tests (optional, demo only)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Run
+```bash
+npm run dev      # http://localhost:3000
+npm run build    # production build
+npm run lint     # eslint
+npm run test:grading   # grading engine unit tests
+npm run test:queue     # offline queue helper tests
+npm run test           # all tests
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+---
 
-## Learn More
+## How it works
 
-To learn more about Next.js, take a look at the following resources:
+### Grading engine (`lib/grading.ts`)
+A **pure function** `evaluateCanTest()` deterministically grades one can's readings. Identical inputs always produce identical outputs. Rules evaluate in fixed order (fat → SNF → temperature → adulteration) so every applicable reason is always reported.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Thresholds (configurable in `lib/config.ts`):
+- Fat ≥ 3.5%
+- SNF ≥ 8.5%
+- Temperature ≤ 10°C
+- Adulteration must be negative
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+A reading within a small delta of a threshold is flagged **borderline** (does not change the decision — only prompts the operator to double-check). Borderline detection uses precision-safe rounding to dodge JavaScript floating-point errors at decimal boundaries (e.g. `3.6 - 3.5`).
 
-## Deploy on Vercel
+### Immutability
+Enforced at **two layers**:
+1. **Database** — `can_tests` and `corrections` have no `UPDATE` or `DELETE` RLS policies. The only way to amend a record is to insert a row into `corrections` (append-only), which never modifies the original.
+2. **TypeScript** — `Update` is typed as `never` on these tables, so `.update()` queries won't compile.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### Offline resilience
+Entries queue in **IndexedDB** (`idb-keyval`) when the network is unavailable and sync automatically on reconnect. The client generates a UUID and `reference_code` *before* going offline; on sync, a Postgres `23505` unique violation is treated as success (idempotent — no duplicates on retry).
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### Timestamps
+Every record carries two timestamps:
+- `test_performed_at` — when the physical test happened on the device (client-supplied). Correct for offline-queued tests. Used on slips and in dispute views.
+- `created_at` — when the row reached the database (server-stamped `DEFAULT now()`). Cannot be backdated by the client.
+
+---
+
+## UX trade-offs
+
+- **Operator "login" is name + any non-empty PIN.** The `operators` table is read-only via RLS; PINs are never sent to the browser. Real PIN verification happens only inside the server-side `submit_correction` RPC. This keeps shift-start frictionless while keeping corrections secure. Trade-off: operator identity at intake is trust-based, which is acceptable for a single-booth prototype but would need real auth for multi-operator centers.
+- **Large touch targets, numeric keypads, minimal free-text.** The intake form is optimized for a standing operator with a queue, not a desk worker. Volume/temp/fat/SNF use centered numeric inputs; adulteration is a two-button PASS/FAIL toggle.
+- **Rejection slip is generated in-flow, no extra screen.** A rejected can routes straight to a shareable slip (PNG via `html-to-image`, with a QR code linking to the dispute view). The farmer gets concrete proof in the same gesture as the decision.
+- **Borderline is flagged, not auto-decided.** A reading near a threshold shows an amber "Review" state with the specific near-limit measurement called out, rather than silently accepting or rejecting.
+- **Override requires a reason.** The operator can override the auto-suggested decision, but must supply a reason, and the record is visibly marked as an override with both the system suggestion and final decision shown.
+
+---
+
+## Edge cases handled
+
+- **Duplicate submit** — `submitLock` ref guards the form; UUID + `reference_code` generated once per submission.
+- **Offline → online sync without duplication** — idempotent retries via `23505` handling.
+- **Borderline readings** — flagged visually, not silently decided; `borderline_flags` persisted to the row.
+- **Operator override** — requires a reason, marked `is_override`, both auto and final decisions stored.
+- **Missing/malformed inputs** — `INVALID_*` reason codes prevent persistence; the form shows "TEST INCOMPLETE" with the specific problems.
+- **Floating-point threshold comparison** — precision-safe rounding (6 decimals) before comparing deltas.
+- **No photo evidence** — `photo_url` is nullable; the record and slip remain usable as text-only.
+- **Correction authorization** — `submit_correction` is a `SECURITY DEFINER` RPC that verifies operator PIN server-side; the client cannot bypass it.
+- **Legacy rows** — `auto_decision` and `is_borderline` are nullable on old rows; the UI degrades gracefully ("Unavailable for this legacy record").
+
+---
+
+## Tech stack
+
+- **Next.js 14** (App Router) + **React 18** + **TypeScript 5**
+- **Tailwind CSS** + hand-rolled shadcn-style UI primitives (`components/ui/`)
+- **Supabase** (Postgres + Row Level Security + RPC)
+- **idb-keyval** (IndexedDB offline queue)
+- **html-to-image** + **qrcode.react** (rejection slip export)
+- **date-fns**, **lucide-react**, **uuid**, **cmdk** (farmer search)
+
+---
+
+## Project structure
+
+```
+app/
+  page.tsx                    # Intake form (operator login + grading)
+  lookup/                     # Dispute search + record detail + correction modal
+  result/[reference]/         # Post-submit result screen
+  slip/[referenceCode]/       # Rejection slip (PNG/PDF export, QR)
+components/
+  SyncStatusBar.tsx           # Persistent online/offline/sync indicator
+  ui/                         # 12 hand-rolled primitives
+lib/
+  grading.ts                  # Canonical grading engine + mapToDbInsert
+  gradingLogic.ts             # @deprecated re-export (do not use)
+  config.ts                   # Quality thresholds
+  offlineQueue.ts             # IndexedDB queue + sync engine
+  supabase.ts                 # Typed Supabase client
+  useNetworkStatus.ts         # Online/offline/sync hook
+  __tests__/                  # Unit tests (tsx-based hand-rolled harness)
+supabase/
+  migrations/                 # 001 schema, 002 audit fields, 003 security
+  seed.sql                    # Demo data
+types/
+  database.ts                 # snake_case DB types, Database map (Update: never)
+  index.ts                    # camelCase app types
+```
+
+---
+
+## Testing
+
+Tests use a lightweight `tsx`-based harness (no jest/vitest dependency). Run all with `npm run test`.
+
+- `lib/__tests__/grading.test.ts` — grading engine: accept/reject/borderline/invalid/float-precision/DB mapping
+- `lib/__tests__/offlineQueue.test.ts` — queue helpers: `isNetworkError` classification, `toAppEntry` mapping
+
+The sync engine itself (`syncPendingEntries`) requires a live Supabase instance and is not covered by unit tests.
+
+---
+
+## Future improvements
+
+- Real operator authentication (Supabase Auth) instead of name + PIN
+- Photo evidence capture at intake (currently `photo_url` is always null)
+- PWA manifest for installable, offline-capable field use
+- Multi-center sync and supervisor analytics dashboard
+- Configurable thresholds per center (currently global in `lib/config.ts`)
+- Integration tests for the sync engine against a ephemeral Postgres/Supabase
+- Farmer SMS/WhatsApp notification on rejection (instead of a printed/shared slip)

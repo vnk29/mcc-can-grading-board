@@ -11,6 +11,7 @@ import { getPendingEntries } from '@/lib/offlineQueue'
 import { REASON_LABELS } from '@/lib/grading'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Skeleton } from '@/components/ui/skeleton'
 import type { DbReasonCode, CanTestWithDetails } from '@/types/database'
 import { cn } from '@/lib/utils'
 
@@ -192,11 +193,8 @@ export default function RejectionSlipPage({ params }: { params: Promise<{ refere
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="text-center space-y-4">
-          <Loader2 className="w-8 h-8 animate-spin mx-auto text-slate-400" />
-          <p className="text-slate-500 font-medium">Loading record...</p>
-        </div>
+      <div className="min-h-screen bg-slate-100 flex flex-col items-center pt-8 pb-12">
+        <Skeleton className="w-[375px] max-w-full h-[600px] bg-white rounded-none shadow-sm" />
       </div>
     )
   }
