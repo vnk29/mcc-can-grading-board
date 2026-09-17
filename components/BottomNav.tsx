@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Plus, History, RefreshCw, Loader2, Scale } from 'lucide-react'
+import { Plus, History, RefreshCw, Loader2, Scale, LayoutDashboard } from 'lucide-react'
 import { useNetworkStatus } from '@/lib/useNetworkStatus'
 import { cn } from '@/lib/utils'
 
@@ -11,6 +11,7 @@ export function BottomNav() {
   const { pendingCount, failedCount, isSyncing, triggerSync, triggerRetry, isOnline } = useNetworkStatus()
 
   const isIntake = pathname === '/'
+  const isDashboard = pathname.startsWith('/dashboard')
   const isRecords = pathname.startsWith('/lookup')
   const isDisputes = pathname.startsWith('/disputes')
 
@@ -29,6 +30,18 @@ export function BottomNav() {
         >
           <Plus className="w-6 h-6 mb-1" strokeWidth={isIntake ? 2.5 : 2} />
           <span className="text-[11px] font-bold">Intake</span>
+        </Link>
+
+        {/* Dashboard Tab */}
+        <Link 
+          href="/dashboard"
+          className={cn(
+            "flex-1 min-w-0 flex flex-col items-center justify-center p-2 transition-colors",
+            isDashboard ? "text-[#0f6041]" : "text-slate-500 hover:text-slate-900"
+          )}
+        >
+          <LayoutDashboard className="w-6 h-6 mb-1" strokeWidth={isDashboard ? 2.5 : 2} />
+          <span className="text-[11px] font-bold">Dashboard</span>
         </Link>
 
         {/* Records Tab */}

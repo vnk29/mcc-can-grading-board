@@ -380,6 +380,8 @@ export function mapToDbInsert(entry: CanTestAppEntry): CanTestInsert {
     snf_percent: entry.snfPercent,
     temperature: entry.temperatureC,     // °C — column name is unit-agnostic; app name is explicit
     adulteration_result: entry.adulterationPositive,
+    acidity_percent: entry.acidityPercent ?? null,
+    sediment_result: entry.sedimentDetected ?? null,
     auto_decision: entry.autoDecision,
     decision: entry.decision,
     is_borderline: entry.isBorderline,

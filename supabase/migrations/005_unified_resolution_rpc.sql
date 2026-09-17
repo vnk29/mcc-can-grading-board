@@ -7,8 +7,7 @@ CREATE OR REPLACE FUNCTION public.resolve_dispute_with_correction(
   p_can_test_id UUID,
   p_dispute_id UUID,
   p_new_values JSONB,
-  p_reason TEXT,
-  p_resolution_type TEXT
+  p_reason TEXT
 )
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -18,6 +17,10 @@ AS $$
 DECLARE
   v_actual_can_test_id UUID;
 BEGIN
+  IF p_new_values->>'decision' != 'accepted' THEN
+    RAISE EXCEPTION 'Correction must result in an accepted decision';
+  END IF;
+
   SELECT can_test_id INTO v_actual_can_test_id FROM public.disputes WHERE id = p_dispute_id;
   IF v_actual_can_test_id IS NULL OR v_actual_can_test_id != p_can_test_id THEN
     RAISE EXCEPTION 'Dispute % does not match can_test %', p_dispute_id, p_can_test_id;
@@ -27,7 +30,7 @@ BEGIN
   PERFORM public.submit_correction(p_operator_id, p_pin, p_can_test_id, p_new_values, p_reason);
   
   -- Call existing resolve_dispute to mark the dispute as resolved
-  PERFORM public.resolve_dispute(p_operator_id, p_pin, p_dispute_id, p_resolution_type, 'Amended via Correction');
+  PERFORM public.resolve_dispute(p_operator_id, p_pin, p_dispute_id, 'adjustment', 'Amended via Correction');
   
   RETURN jsonb_build_object('success', true);
 END;

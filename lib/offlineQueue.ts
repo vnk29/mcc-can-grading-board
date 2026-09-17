@@ -151,8 +151,16 @@ export function toAppEntry(entry: CanTestEntry): CanTestAppEntry {
     overrideReason: entry.overrideReason ?? null,
     referenceCode: entry.referenceCode,
     photoUrl: entry.photoUrl ?? null,
-    evidenceType: entry.evidenceType ?? null,
-    sensoryNote: entry.sensoryNote ?? null,
+    evidenceType: entry.evidenceType ?? (
+      entry.finalDecision === 'rejected' 
+        ? (entry.photoUrl ? 'photo' : 'sensory') 
+        : null
+    ),
+    sensoryNote: entry.sensoryNote ?? (
+      entry.finalDecision === 'rejected' && !entry.evidenceType && !entry.photoUrl 
+        ? 'Legacy rejection: No evidence provided' 
+        : null
+    ),
     testPerformedAt: entry.testPerformedAt,
   }
 }

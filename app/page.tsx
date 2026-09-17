@@ -402,7 +402,13 @@ export default function IntakePage() {
           const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.8)
           setPhotoDataUrl(compressedDataUrl)
         }
+        img.onerror = () => {
+          setSubmitError('Failed to decode the selected photo.')
+        }
         img.src = reader.result as string
+      }
+      reader.onerror = () => {
+        setSubmitError('Failed to read the selected photo file.')
       }
       reader.readAsDataURL(file)
     }

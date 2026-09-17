@@ -123,6 +123,8 @@ export type CanTestRow = {
    */
   temperature: number
   adulteration_result: boolean
+  acidity_percent: number | null
+  sediment_result: boolean | null
   /** Automatic grading result before any operator override. Null for legacy rows. */
   auto_decision: CanDecision | null
   decision: CanDecision
@@ -162,6 +164,8 @@ export type CanTestInsert = {
   /** Temperature in CELSIUS. Maps from app-layer field `temperatureC`. */
   temperature: number
   adulteration_result: boolean
+  acidity_percent?: number | null
+  sediment_result?: boolean | null
   auto_decision: CanDecision
   decision: CanDecision
   is_borderline: boolean
@@ -396,7 +400,6 @@ export type Database = {
           p_dispute_id: string
           p_new_values: Record<string, unknown>
           p_reason: string
-          p_resolution_type: DisputeResolutionType
         }
         Returns: { success: boolean }
       }

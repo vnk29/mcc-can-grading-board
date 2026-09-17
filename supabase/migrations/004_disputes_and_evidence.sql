@@ -44,7 +44,9 @@
 
 ALTER TABLE can_tests
   ADD COLUMN evidence_type TEXT CHECK (evidence_type IN ('photo', 'sensory')),
-  ADD COLUMN sensory_note  TEXT;
+  ADD COLUMN sensory_note  TEXT,
+  ADD COLUMN acidity_percent NUMERIC(5,2),
+  ADD COLUMN sediment_result BOOLEAN;
 
 COMMENT ON COLUMN can_tests.evidence_type IS
   'The type of mandatory evidence captured for a rejected can: ''photo'' (photo_url populated) '
@@ -260,7 +262,9 @@ BEGIN
     'resolution_type', d.resolution_type
   ) INTO v_status
   FROM public.disputes d
-  WHERE d.can_test_id = p_can_test_id;
+  WHERE d.can_test_id = p_can_test_id
+  ORDER BY d.submitted_at DESC
+  LIMIT 1;
 
   RETURN v_status; -- Will be NULL if no dispute exists
 END;

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, use } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { format } from 'date-fns'
@@ -40,9 +40,10 @@ type DisputeDetail = DisputeRow & {
   }
 }
 
-export default function DisputeDetailPage({ params }: { params: { id: string } }) {
+export default function DisputeDetailPage({ params }: { params: Promise<{ id: string }> | { id: string } }) {
   const router = useRouter()
-  const disputeId = params.id
+  const unwrappedParams = params instanceof Promise ? use(params) : params
+  const disputeId = unwrappedParams.id
 
   const [dispute, setDispute] = useState<DisputeDetail | null>(null)
   const [operators, setOperators] = useState<Pick<OperatorRow, 'id' | 'name'>[]>([])
@@ -190,13 +191,43 @@ export default function DisputeDetailPage({ params }: { params: { id: string } }
     try {
       if (!dispute) throw new Error('Missing dispute data')
 
+      // Validate adjustment inputs
+      const vVol = adjustVolume.trim()
+      const vFat = adjustFat.trim()
+      const vSnf = adjustSnf.trim()
+      const vTemp = adjustTemp.trim()
+
+      if (!vVol || !vFat || !vSnf || !vTemp) {
+        setAuthError('All core numeric values must be provided')
+        setIsSubmitting(false)
+        return
+      }
+
+      const nVol = Number(vVol)
+      const nFat = Number(vFat)
+      const nSnf = Number(vSnf)
+      const nTemp = Number(vTemp)
+      const nAcidity = adjustAcidity.trim() ? Number(adjustAcidity) : null
+
+      if (
+        !Number.isFinite(nVol) ||
+        !Number.isFinite(nFat) ||
+        !Number.isFinite(nSnf) ||
+        !Number.isFinite(nTemp) ||
+        (nAcidity !== null && !Number.isFinite(nAcidity))
+      ) {
+        setAuthError('One or more values is not a valid number')
+        setIsSubmitting(false)
+        return
+      }
+
       // Submit Correction & Resolve Dispute atomically
       const newValues = {
-        can_volume: Number(adjustVolume),
-        fat_percent: Number(adjustFat),
-        snf_percent: Number(adjustSnf),
-        temperature: Number(adjustTemp),
-        acidity_percent: adjustAcidity ? Number(adjustAcidity) : null,
+        can_volume: nVol,
+        fat_percent: nFat,
+        snf_percent: nSnf,
+        temperature: nTemp,
+        acidity_percent: nAcidity,
         sediment_detected: adjustSediment,
         decision: 'accepted' // Adjustments mathematically imply accepting a previously rejected can
       }
@@ -207,8 +238,7 @@ export default function DisputeDetailPage({ params }: { params: { id: string } }
         p_can_test_id: dispute.can_test.id,
         p_dispute_id: disputeId,
         p_new_values: newValues,
-        p_reason: adjustReason,
-        p_resolution_type: 'adjustment'
+        p_reason: adjustReason
       })
 
       if (resolveError) throw resolveError

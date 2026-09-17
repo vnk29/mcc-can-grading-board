@@ -16,3 +16,4 @@ GRANT SELECT ON public.operator_profiles TO anon, authenticated;
 
 -- 3. Revoke public SELECT access on the raw operators table
 DROP POLICY IF EXISTS "operators_select" ON public.operators;
+REVOKE SELECT ON public.operators FROM anon, authenticated;
