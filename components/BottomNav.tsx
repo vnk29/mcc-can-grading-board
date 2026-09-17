@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Plus, History, RefreshCw, Loader2 } from 'lucide-react'
+import { Plus, History, RefreshCw, Loader2, Scale } from 'lucide-react'
 import { useNetworkStatus } from '@/lib/useNetworkStatus'
 import { cn } from '@/lib/utils'
 
@@ -12,17 +12,18 @@ export function BottomNav() {
 
   const isIntake = pathname === '/'
   const isRecords = pathname.startsWith('/lookup')
+  const isDisputes = pathname.startsWith('/disputes')
 
   const totalQueued = pendingCount + failedCount
 
   return (
     <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-50 pb-safe">
-      <div className="max-w-md mx-auto flex justify-between items-center px-6 py-2">
+      <div className="max-w-md mx-auto flex justify-between items-center px-2 py-2">
         {/* Intake Tab */}
         <Link 
           href="/"
           className={cn(
-            "flex flex-col items-center justify-center p-2 min-w-[72px] transition-colors",
+            "flex-1 min-w-0 flex flex-col items-center justify-center p-2 transition-colors",
             isIntake ? "text-[#0f6041]" : "text-slate-500 hover:text-slate-900"
           )}
         >
@@ -34,12 +35,24 @@ export function BottomNav() {
         <Link 
           href="/lookup"
           className={cn(
-            "flex flex-col items-center justify-center p-2 min-w-[72px] transition-colors",
+            "flex-1 min-w-0 flex flex-col items-center justify-center p-2 transition-colors",
             isRecords ? "text-[#0f6041]" : "text-slate-500 hover:text-slate-900"
           )}
         >
           <History className="w-6 h-6 mb-1" strokeWidth={isRecords ? 2.5 : 2} />
           <span className="text-[11px] font-bold">Records</span>
+        </Link>
+
+        {/* Disputes Tab */}
+        <Link 
+          href="/disputes"
+          className={cn(
+            "flex-1 min-w-0 flex flex-col items-center justify-center p-2 transition-colors",
+            isDisputes ? "text-[#0f6041]" : "text-slate-500 hover:text-slate-900"
+          )}
+        >
+          <Scale className="w-6 h-6 mb-1" strokeWidth={isDisputes ? 2.5 : 2} />
+          <span className="text-[11px] font-bold">Disputes</span>
         </Link>
 
         {/* Sync Action */}

@@ -56,8 +56,7 @@ export default function LookupSearchPage() {
           .from('can_tests')
           .select(`
             *,
-            farmer:farmers!inner (name),
-            operator:operators (name)
+            farmer:farmers!inner (name)
           `)
           .order('test_performed_at', { ascending: false })
           .limit(500)
@@ -83,9 +82,23 @@ export default function LookupSearchPage() {
           query = query.lte('test_performed_at', end.toISOString())
         }
 
-        const { data, error: dbError } = await query.returns<CanTestWithDetails[]>()
+        const { data: dbData, error: dbError } = await query.returns<CanTestWithDetails[]>()
         if (dbError) throw dbError
-        remoteRecords = data || []
+        
+        if (dbData && dbData.length > 0) {
+          const { data: opsData } = await supabase.from('operator_profiles').select('id, name')
+          if (opsData) {
+            dbData.forEach((row: unknown) => {
+              const record = row as CanTestWithDetails & { operator_id?: string }
+              if (record.operator_id) {
+                const op = opsData.find(o => o.id === record.operator_id)
+                record.operator = op ? { name: op.name } : { name: 'Unknown' }
+              }
+            })
+          }
+        }
+        
+        remoteRecords = dbData || []
       }
 
       // 2. Fetch local queue

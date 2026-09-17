@@ -60,9 +60,9 @@ function makeEntry(overrides: Partial<CanTestEntry> = {}): CanTestEntry {
     testPerformedAt: '2026-09-16T06:15:00+05:30',
     syncStatus: 'pending',
     queuedAt: '2026-09-16T06:15:01+05:30',
-    evidenceType: null,
-    sensoryNote: null,
-    photoUrl: null,
+    evidenceType: undefined,
+    sensoryNote: undefined,
+    photoUrl: undefined,
     ...overrides,
   }
 }

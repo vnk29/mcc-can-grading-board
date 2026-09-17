@@ -59,14 +59,17 @@ export default function RejectionSlipPage({ params }: { params: Promise<{ refere
           .from('can_tests')
           .select(`
             *,
-            farmer:farmers (name),
-            operator:operators (name)
+            farmer:farmers (name)
           `)
           .eq('reference_code', referenceCode)
           .maybeSingle()
           .returns<CanTestWithDetails>()
 
         if (dbData) {
+          if (dbData.operator_id) {
+            const { data: opData } = await supabase.from('operator_profiles').select('name').eq('id', dbData.operator_id).single()
+            ;(dbData as unknown as { operator?: { name: string } }).operator = opData || { name: 'Unknown' }
+          }
           // It's a CanTestRow with joined relations
           const joinedData = dbData
           
@@ -74,7 +77,7 @@ export default function RejectionSlipPage({ params }: { params: Promise<{ refere
             referenceCode: joinedData.reference_code,
             testPerformedAt: joinedData.test_performed_at,
             farmerName: joinedData.farmer?.name || 'Unknown',
-            operatorName: joinedData.operator?.name || 'Unknown',
+            operatorName: (joinedData as unknown as { operator?: { name: string } }).operator?.name || 'Unknown',
             canVolume: joinedData.can_volume,
             fatPercent: joinedData.fat_percent,
             snfPercent: joinedData.snf_percent,

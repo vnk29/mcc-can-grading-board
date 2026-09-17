@@ -8,7 +8,7 @@ import { format } from 'date-fns'
 
 import { supabase } from '@/lib/supabase'
 import { REASON_LABELS } from '@/lib/grading'
-import type { CanTestWithDetails, CorrectionWithOperator, DbReasonCode } from '@/types/database'
+import type { CanTestWithDetails, CorrectionWithOperator, DbReasonCode, DisputeStatus, DisputeResolutionType } from '@/types/database'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Input } from '@/components/ui/input'
@@ -54,6 +54,16 @@ export default function RecordDetailPage({
   const [newTemp, setNewTemp] = useState('')
   const [newDecision, setNewDecision] = useState<string>('')
 
+  // Dispute State
+  const [disputeStatus, setDisputeStatus] = useState<{ status: DisputeStatus, submitted_at: string, resolved_at: string | null, resolution_type: DisputeResolutionType | null } | null>(null)
+  const [batchHistory, setBatchHistory] = useState<Pick<CanTestWithDetails, 'reference_code' | 'test_performed_at' | 'decision' | 'reason_codes' | 'is_override'>[]>([])
+  
+  // Dispute Modal State
+  const [showDisputeModal, setShowDisputeModal] = useState(false)
+  const [isSubmittingDispute, setIsSubmittingDispute] = useState(false)
+  const [disputeReason, setDisputeReason] = useState('')
+  const [disputeError, setDisputeError] = useState<string | null>(null)
+
   useEffect(() => {
     fetchData()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -68,17 +78,18 @@ export default function RecordDetailPage({
         .from('can_tests')
         .select(`
           *,
-          farmer:farmers!inner (name, phone, village),
-          operator:operators (name)
+          farmer:farmers!inner (name, phone, village)
         `)
         .eq('reference_code', referenceCode)
         .maybeSingle()
-        .returns<CanTestWithDetails>()
 
       if (dbError) throw dbError
-      if (dbError) throw dbError
       
-      let canTest = dbData
+      let canTest = dbData as unknown as CanTestWithDetails
+      if (canTest && canTest.operator_id) {
+        const { data: opData } = await supabase.from('operator_profiles').select('name').eq('id', canTest.operator_id).single()
+        canTest.operator = opData || { name: 'Unknown' }
+      }
       let isOffline = false
 
       if (!canTest) {
@@ -130,19 +141,45 @@ export default function RecordDetailPage({
       // 2. Fetch corrections
       const { data: corrData, error: corrError } = await supabase
         .from('corrections')
-        .select(`
-          *,
-          operator:operators!inner (name)
-        `)
+        .select('*')
         .eq('can_test_id', canTest.id)
         .order('created_at', { ascending: true })
-        .returns<CorrectionWithOperator[]>()
 
       if (corrError) throw corrError
-      setCorrections(corrData || [])
+      
+      let correctionsWithOps: CorrectionWithOperator[] = []
+      if (corrData && corrData.length > 0) {
+        const { data: opsData } = await supabase.from('operator_profiles').select('id, name')
+        correctionsWithOps = corrData.map(c => {
+          const op = opsData?.find(o => o.id === c.corrected_by)
+          return { ...c, operator: op ? { name: op.name } : { name: 'Unknown' } }
+        })
+      }
+      setCorrections(correctionsWithOps as CorrectionWithOperator[])
 
-      // 3. Fetch operators for the correction auth
-      const { data: opsData } = await supabase.from('operators').select('id, name').order('name')
+      // 3. Fetch dispute status and batch history for online records
+      if (!isOffline && canTest) {
+        const { data: disputeData, error: disputeError } = await supabase.rpc('get_dispute_status', {
+          p_can_test_id: canTest.id,
+          p_reference_code: canTest.reference_code
+        })
+        if (disputeError) throw disputeError
+        setDisputeStatus(disputeData ?? null)
+
+        const { data: batchData } = await supabase
+          .from('can_tests')
+          .select('reference_code, test_performed_at, decision, reason_codes, is_override')
+          .eq('farmer_id', canTest.farmer_id)
+          .order('test_performed_at', { ascending: false })
+          .limit(5)
+        
+        if (batchData) {
+          setBatchHistory(batchData as unknown as Pick<CanTestWithDetails, 'reference_code' | 'test_performed_at' | 'decision' | 'reason_codes' | 'is_override'>[])
+        }
+      }
+
+      // 4. Fetch operators for the correction auth
+      const { data: opsData } = await supabase.from('operator_profiles').select('id, name').order('name')
       if (opsData) {
         setOperators(opsData)
         
@@ -203,6 +240,34 @@ export default function RecordDetailPage({
       setShowCorrectionModal(true)
     } else {
       setPinError('PIN is required')
+    }
+  }
+
+  const submitDispute = async () => {
+    if (!record || !disputeReason.trim()) {
+      setDisputeError('Please provide a reason for the dispute.')
+      return
+    }
+
+    setIsSubmittingDispute(true)
+    setDisputeError(null)
+
+    try {
+      const { error } = await supabase.rpc('submit_dispute', {
+        p_can_test_id: record.id,
+        p_reference_code: record.reference_code,
+        p_farmer_message: disputeReason.trim()
+      })
+
+      if (error) throw error
+
+      setShowDisputeModal(false)
+      await fetchData()
+    } catch (err: unknown) {
+      console.error(err)
+      setDisputeError('Failed to submit dispute. Please try again.')
+    } finally {
+      setIsSubmittingDispute(false)
     }
   }
 
@@ -420,6 +485,30 @@ export default function RecordDetailPage({
           </div>
         </div>
 
+        {/* Evidence */}
+        {record.evidence_type && (
+          <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm space-y-4">
+            <h3 className="text-[16px] font-bold text-slate-900 border-b border-slate-100 pb-2 mb-3">Evidence</h3>
+            {record.evidence_type === 'photo' && record.photo_url && (
+              <div className="space-y-2">
+                <p className="text-[12px] text-slate-500 font-bold uppercase tracking-wider mb-1">Attached Photo</p>
+                <div className="rounded-lg overflow-hidden border border-slate-200">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={record.photo_url} alt="Evidence" className="w-full h-auto object-cover max-h-64" />
+                </div>
+              </div>
+            )}
+            {record.evidence_type === 'sensory' && record.sensory_note && (
+              <div className="space-y-2">
+                <p className="text-[12px] text-slate-500 font-bold uppercase tracking-wider mb-1">Inspector Note</p>
+                <p className="text-[16px] text-slate-900 bg-slate-50 p-3 rounded-lg border border-slate-200 italic">
+                  “{record.sensory_note}”
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Farmer & Operator */}
         <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm space-y-4">
           <h3 className="text-[16px] font-bold text-slate-900 border-b border-slate-100 pb-2 mb-3">Farmer &amp; Operator</h3>
@@ -451,9 +540,46 @@ export default function RecordDetailPage({
               </p>
             </div>
             
+            {!disputeStatus && !isOfflineRecord && (
+              <Button
+                onClick={() => setShowDisputeModal(true)}
+                className="w-full h-14 text-[17px] font-bold rounded-xl bg-slate-900 hover:bg-slate-800 text-white shadow-sm"
+              >
+                Dispute this Result
+              </Button>
+            )}
+
+            {disputeStatus && (
+              <div className={cn(
+                "border rounded-xl p-4 flex gap-3",
+                disputeStatus.status === 'resolved' 
+                  ? (disputeStatus.resolution_type === 'adjustment' ? "bg-green-50 border-green-200 text-green-900" : "bg-red-50 border-red-200 text-red-900")
+                  : "bg-blue-50 border-blue-200 text-blue-900"
+              )}>
+                {disputeStatus.status === 'resolved' ? (
+                  disputeStatus.resolution_type === 'adjustment' ? <CheckCircle2 className="w-6 h-6 shrink-0 mt-0.5" /> : <XCircle className="w-6 h-6 shrink-0 mt-0.5" />
+                ) : (
+                  <AlertCircle className="w-6 h-6 shrink-0 mt-0.5" />
+                )}
+                <div>
+                  <p className="font-bold text-[15px]">
+                    {disputeStatus.status === 'resolved' 
+                      ? `Dispute Resolved: ${disputeStatus.resolution_type === 'adjustment' ? 'Accepted' : 'Rejected'}`
+                      : 'Dispute already submitted'}
+                  </p>
+                  <p className="text-[13px] mt-1 opacity-90">
+                    {disputeStatus.status === 'resolved'
+                      ? 'An operator has reviewed this dispute and made a final decision.'
+                      : 'An operator at the collection center can now review this dispute.'}
+                  </p>
+                </div>
+              </div>
+            )}
+            
             <Button
               onClick={() => router.push(`/slip/${record.reference_code}`)}
-              className="w-full h-14 text-[17px] font-bold rounded-xl bg-red-600 hover:bg-red-700 text-white shadow-sm"
+              variant="outline"
+              className="w-full h-14 text-[17px] font-bold rounded-xl border-slate-200 bg-white hover:bg-slate-50 text-slate-800 shadow-sm"
             >
               <QrCode className="w-5 h-5 mr-2" /> View Rejection Slip
             </Button>
@@ -533,6 +659,36 @@ export default function RecordDetailPage({
              </div>
           )}
         </div>
+
+        {/* Batch History */}
+        {batchHistory.length > 0 && (
+          <div className="mt-8 border-t border-slate-200 pt-6">
+             <h3 className="font-bold text-[18px] text-slate-900 mb-4">Recent Records</h3>
+             <div className="space-y-3">
+               {batchHistory.map(entry => (
+                 <div key={entry.reference_code} className="bg-white border border-slate-200 p-4 rounded-xl shadow-sm flex items-center justify-between">
+                   <div>
+                     <p className="font-bold text-[15px] text-slate-900">{entry.reference_code}</p>
+                     <p className="text-[13px] text-slate-500">{format(new Date(entry.test_performed_at), 'MMM d, h:mm a')}</p>
+                   </div>
+                   <div className="text-right flex flex-col items-end">
+                     <span className={cn(
+                       "px-2.5 py-1 text-[12px] font-bold rounded-md uppercase tracking-wider",
+                       entry.decision === 'accepted' ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
+                     )}>
+                       {entry.decision}
+                     </span>
+                     {entry.decision === 'rejected' && entry.reason_codes && entry.reason_codes.length > 0 && (
+                       <span className="text-[12px] text-slate-500 mt-1 max-w-[150px] truncate">
+                         {REASON_LABELS[entry.reason_codes[0] as DbReasonCode] || entry.reason_codes[0]}
+                       </span>
+                     )}
+                   </div>
+                 </div>
+               ))}
+             </div>
+          </div>
+        )}
       </div>
 
       {/* --- PIN DIALOG --- */}
@@ -646,6 +802,47 @@ export default function RecordDetailPage({
             <Button onClick={submitCorrection} disabled={isSubmittingCorrection || !correctionReason.trim()}>
               {isSubmittingCorrection ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
               Submit Amendment
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* --- DISPUTE DIALOG --- */}
+      <Dialog open={showDisputeModal} onOpenChange={setShowDisputeModal}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Dispute this Result</DialogTitle>
+            <DialogDescription>
+              Submit a dispute for review by the collection center operator.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            {disputeError && (
+              <div className="p-3 bg-red-50 text-red-700 text-[14px] font-medium rounded border border-red-200">
+                {disputeError}
+              </div>
+            )}
+            
+            <div className="space-y-2">
+               <Label className="font-bold text-[15px]">Why are you disputing this result? *</Label>
+               <Textarea 
+                 placeholder="Please provide details about why this rejection is incorrect..."
+                 value={disputeReason}
+                 onChange={e => setDisputeReason(e.target.value)}
+                 rows={4}
+                 className="text-[16px] p-3" // Larger text for mobile
+               />
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDisputeModal(false)} disabled={isSubmittingDispute} className="h-12 text-[15px]">
+              Cancel
+            </Button>
+            <Button onClick={submitDispute} disabled={isSubmittingDispute || !disputeReason.trim()} className="h-12 text-[15px]">
+              {isSubmittingDispute ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+              Submit Dispute
             </Button>
           </DialogFooter>
         </DialogContent>

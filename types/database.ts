@@ -330,7 +330,24 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      operator_profiles: {
+        Row: {
+          id: string
+          name: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          name?: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
     }
     Functions: {
       submit_correction: {
@@ -346,10 +363,19 @@ export type Database = {
       submit_dispute: {
         Args: {
           p_can_test_id: string
+          p_reference_code: string
           p_farmer_message: string
         }
         /** Returns the new dispute id on success. */
         Returns: { id: string }
+      }
+      get_dispute_status: {
+        Args: {
+          p_can_test_id: string
+          p_reference_code: string
+        }
+        /** Returns the dispute status details or null if no dispute exists. */
+        Returns: { status: DisputeStatus, submitted_at: string, resolved_at: string | null, resolution_type: DisputeResolutionType | null } | null
       }
       resolve_dispute: {
         Args: {
@@ -361,6 +387,18 @@ export type Database = {
         }
         /** Returns the dispute id and resolution_type on success. */
         Returns: { id: string; resolution_type: DisputeResolutionType }
+      }
+      resolve_dispute_with_correction: {
+        Args: {
+          p_operator_id: string
+          p_pin: string
+          p_can_test_id: string
+          p_dispute_id: string
+          p_new_values: Record<string, unknown>
+          p_reason: string
+          p_resolution_type: DisputeResolutionType
+        }
+        Returns: { success: boolean }
       }
     }
     Enums: {

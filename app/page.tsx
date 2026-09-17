@@ -89,7 +89,7 @@ export default function IntakePage() {
 
     try {
       const [opRes, fmRes] = await Promise.all([
-        supabase.from('operators').select('id, name').order('name'),
+        supabase.from('operator_profiles').select('id, name').order('name'),
         supabase.from('farmers').select('*').order('name')
       ])
       
@@ -366,9 +366,43 @@ export default function IntakePage() {
   const handlePhotoCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
+      if (file.size > 10 * 1024 * 1024) {
+        setSubmitError('Photo is too large. Please take a new one under 10MB.')
+        return
+      }
+      if (submitError === 'Photo is too large. Please take a new one under 10MB.') {
+        setSubmitError('')
+      }
+      
       const reader = new FileReader()
       reader.onloadend = () => {
-        setPhotoDataUrl(reader.result as string)
+        const img = new Image()
+        img.onload = () => {
+          const canvas = document.createElement('canvas')
+          const MAX_DIMENSION = 1024
+          let { width, height } = img
+
+          if (width > height) {
+            if (width > MAX_DIMENSION) {
+              height = Math.round((height * MAX_DIMENSION) / width)
+              width = MAX_DIMENSION
+            }
+          } else {
+            if (height > MAX_DIMENSION) {
+              width = Math.round((width * MAX_DIMENSION) / height)
+              height = MAX_DIMENSION
+            }
+          }
+
+          canvas.width = width
+          canvas.height = height
+          const ctx = canvas.getContext('2d')
+          ctx?.drawImage(img, 0, 0, width, height)
+
+          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.8)
+          setPhotoDataUrl(compressedDataUrl)
+        }
+        img.src = reader.result as string
       }
       reader.readAsDataURL(file)
     }

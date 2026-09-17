@@ -62,9 +62,9 @@ ALTER TABLE can_tests
     CHECK (
       (decision = 'accepted' AND evidence_type IS NULL AND photo_url IS NULL AND sensory_note IS NULL)
       OR
-      (decision = 'rejected' AND evidence_type = 'photo' AND photo_url IS NOT NULL AND photo_url <> '' AND sensory_note IS NULL)
+      (decision = 'rejected' AND evidence_type = 'photo' AND photo_url IS NOT NULL AND trim(photo_url) <> '' AND sensory_note IS NULL)
       OR
-      (decision = 'rejected' AND evidence_type = 'sensory' AND sensory_note IS NOT NULL AND sensory_note <> '' AND photo_url IS NULL)
+      (decision = 'rejected' AND evidence_type = 'sensory' AND sensory_note IS NOT NULL AND trim(sensory_note) <> '' AND photo_url IS NULL)
     ) NOT VALID;
 
 -- Update the reason_codes comment to document all accepted codes including new ones.
@@ -143,8 +143,7 @@ CREATE UNIQUE INDEX idx_disputes_single_open ON disputes(can_test_id) WHERE stat
 
 ALTER TABLE disputes ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "disputes_select" ON disputes
-  FOR SELECT TO anon, authenticated USING (true);
+-- NO SELECT policy — all reads go through get_dispute_status RPC (SECURITY DEFINER).
 
 -- NO INSERT policy — all writes go through RPCs (SECURITY DEFINER).
 -- NO UPDATE policy.
@@ -165,6 +164,7 @@ CREATE POLICY "disputes_select" ON disputes
 
 CREATE OR REPLACE FUNCTION public.submit_dispute(
   p_can_test_id    UUID,
+  p_reference_code TEXT,
   p_farmer_message TEXT
 )
 RETURNS JSONB
@@ -174,6 +174,7 @@ SET search_path = public, pg_temp
 AS $$
 DECLARE
   v_decision    TEXT;
+  v_ref_code    TEXT;
   v_dispute_id  UUID;
 BEGIN
   -- 1. Validate inputs
@@ -185,13 +186,17 @@ BEGIN
     RAISE EXCEPTION 'Invalid request: farmer_message must be 1000 characters or fewer';
   END IF;
 
-  -- 2. Verify the can_test exists and was rejected
-  SELECT decision INTO v_decision
+  -- 2. Verify the can_test exists, is owned by the reference code, and was rejected
+  SELECT decision, reference_code INTO v_decision, v_ref_code
   FROM public.can_tests
   WHERE id = p_can_test_id;
 
   IF NOT FOUND THEN
     RAISE EXCEPTION 'Invalid request: Can test not found';
+  END IF;
+
+  IF p_reference_code IS NULL OR v_ref_code IS DISTINCT FROM p_reference_code THEN
+    RAISE EXCEPTION 'Unauthorized: Invalid reference code';
   END IF;
 
   IF v_decision <> 'rejected' THEN
@@ -221,6 +226,51 @@ COMMENT ON FUNCTION public.submit_dispute IS
 
 REVOKE EXECUTE ON FUNCTION public.submit_dispute FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.submit_dispute TO anon, authenticated;
+
+-- ─── 4b. GET_DISPUTE_STATUS RPC ──────────────────────────────────────────────
+-- Farmer-facing. Requires the can test reference code for proof of ownership.
+-- Returns only safe status fields, without sensitive notes or operator IDs.
+
+CREATE OR REPLACE FUNCTION public.get_dispute_status(
+  p_can_test_id    UUID,
+  p_reference_code TEXT
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_ref_code TEXT;
+  v_status   JSONB;
+BEGIN
+  -- Validate ownership
+  SELECT reference_code INTO v_ref_code
+  FROM public.can_tests
+  WHERE id = p_can_test_id;
+
+  IF NOT FOUND OR p_reference_code IS NULL OR v_ref_code IS DISTINCT FROM p_reference_code THEN
+    RAISE EXCEPTION 'Unauthorized: Invalid test or reference code';
+  END IF;
+
+  SELECT jsonb_build_object(
+    'status', d.status,
+    'submitted_at', d.submitted_at,
+    'resolved_at', d.resolved_at,
+    'resolution_type', d.resolution_type
+  ) INTO v_status
+  FROM public.disputes d
+  WHERE d.can_test_id = p_can_test_id;
+
+  RETURN v_status; -- Will be NULL if no dispute exists
+END;
+$$;
+
+COMMENT ON FUNCTION public.get_dispute_status IS
+  'Farmer-facing RPC to read dispute status securely using reference code.';
+
+REVOKE EXECUTE ON FUNCTION public.get_dispute_status FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.get_dispute_status TO anon, authenticated;
 
 
 -- ─── 5. RESOLVE_DISPUTE RPC ──────────────────────────────────────────────────

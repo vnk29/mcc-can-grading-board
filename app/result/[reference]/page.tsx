@@ -56,8 +56,7 @@ export default function ResultPage({ params }: { params: Promise<{ reference: st
           .from('can_tests')
           .select(`
             *,
-            farmers(name),
-            operators(name)
+            farmers(name)
           `)
           .eq('reference_code', reference)
           .maybeSingle()
@@ -70,6 +69,10 @@ export default function ResultPage({ params }: { params: Promise<{ reference: st
         }
 
         if (dbData) {
+          if (dbData.operator_id) {
+            const { data: opData } = await supabase.from('operator_profiles').select('name').eq('id', dbData.operator_id).single()
+            ;(dbData as unknown as { operators?: { name: string } }).operators = opData || undefined
+          }
           const row = dbData as CanTestRow & { farmers?: { name: string }, operators?: { name: string } }
           setRecord({
             referenceCode: row.reference_code,
