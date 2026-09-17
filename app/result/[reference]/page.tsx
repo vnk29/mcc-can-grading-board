@@ -2,11 +2,13 @@
 
 import { useEffect, useState, use } from 'react'
 import { useRouter } from 'next/navigation'
-import { CheckCircle2, AlertTriangle, XCircle, ArrowLeft, Loader2, AlertCircle, Share2 } from 'lucide-react'
+import { QRCodeCanvas } from 'qrcode.react'
+import { CheckCircle2, AlertTriangle, XCircle, ArrowLeft, Loader2, AlertCircle, Printer, QrCode } from 'lucide-react'
 
 import { supabase } from '@/lib/supabase'
 import { getPendingEntries } from '@/lib/offlineQueue'
 import { REASON_LABELS } from '@/lib/grading'
+import { safeFetchErrorMessage } from '@/lib/errorMessages'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import type { CanTestRow, DbReasonCode } from '@/types/database'
@@ -32,6 +34,15 @@ export default function ResultPage({ params }: { params: Promise<{ reference: st
     reasonCodes: string[]
     testPerformedAt: string
     isOffline: boolean
+    canVolume?: number
+    fatPercent: number
+    snfPercent: number
+    temperatureC: number
+    adulterationPositive: boolean
+    farmerId: string
+    farmerName: string
+    operatorId: string
+    operatorName?: string
   } | null>(null)
 
   useEffect(() => {
@@ -41,14 +52,25 @@ export default function ResultPage({ params }: { params: Promise<{ reference: st
       setIsLoading(true)
       try {
         // 1. Try Supabase first
-        const { data: dbData } = await supabase
+        const { data: dbData, error: dbError } = await supabase
           .from('can_tests')
-          .select('*')
+          .select(`
+            *,
+            farmers(name),
+            operators(name)
+          `)
           .eq('reference_code', reference)
           .maybeSingle()
 
+        if (dbError) {
+          // Real database/network error — not a "not found" situation
+          console.error('Error fetching from Supabase:', dbError)
+          setError(safeFetchErrorMessage(dbError))
+          return
+        }
+
         if (dbData) {
-          const row = dbData as CanTestRow
+          const row = dbData as CanTestRow & { farmers?: { name: string }, operators?: { name: string } }
           setRecord({
             referenceCode: row.reference_code,
             finalDecision: row.decision,
@@ -58,7 +80,16 @@ export default function ResultPage({ params }: { params: Promise<{ reference: st
             overrideReason: row.override_reason,
             reasonCodes: row.reason_codes,
             testPerformedAt: row.test_performed_at,
-            isOffline: false
+            isOffline: false,
+            canVolume: row.can_volume !== null ? row.can_volume : undefined,
+            fatPercent: row.fat_percent,
+            snfPercent: row.snf_percent,
+            temperatureC: row.temperature,
+            adulterationPositive: row.adulteration_result,
+            farmerId: row.farmer_id,
+            farmerName: row.farmers?.name || 'Unknown',
+            operatorId: row.operator_id,
+            operatorName: row.operators?.name || undefined
           })
           return
         }
@@ -77,16 +108,25 @@ export default function ResultPage({ params }: { params: Promise<{ reference: st
             overrideReason: offlineMatch.overrideReason,
             reasonCodes: offlineMatch.reasonCodes,
             testPerformedAt: offlineMatch.testPerformedAt,
-            isOffline: true
+            isOffline: true,
+            canVolume: offlineMatch.canVolume,
+            fatPercent: offlineMatch.fatPercent,
+            snfPercent: offlineMatch.snfPercent,
+            temperatureC: offlineMatch.temperatureC,
+            adulterationPositive: offlineMatch.adulterationPositive,
+            farmerId: offlineMatch.farmerId,
+            farmerName: offlineMatch.farmerName,
+            operatorId: offlineMatch.operatorId,
+            operatorName: offlineMatch.operatorName
           })
           return
         }
 
-        // 3. Not found anywhere
-        setError('Record not found. It may have been deleted or never saved.')
+        // 3. Genuinely not found in either source
+        setError('Record not found. It may still be processing or may not have been saved.')
       } catch (err) {
-        console.error('Error fetching result:', err)
-        setError('Failed to load result. Please check your connection.')
+        console.error('Unexpected error fetching result:', err)
+        setError(safeFetchErrorMessage(err))
       } finally {
         setIsLoading(false)
       }
@@ -116,7 +156,7 @@ export default function ResultPage({ params }: { params: Promise<{ reference: st
             <CardDescription className="text-red-700">{error}</CardDescription>
           </CardHeader>
           <CardContent className="pt-6">
-            <Button onClick={() => router.push('/')} className="w-full h-12 text-lg" variant="outline">
+            <Button onClick={() => router.push('/')} className="w-full h-14 text-lg rounded-xl" variant="outline">
               <ArrowLeft className="w-5 h-5 mr-2" /> Back to Intake
             </Button>
           </CardContent>
@@ -125,98 +165,165 @@ export default function ResultPage({ params }: { params: Promise<{ reference: st
     )
   }
 
-  const { finalDecision, autoDecision, isBorderline, isOverride, overrideReason, reasonCodes, isOffline } = record
+  const { 
+    finalDecision, isOverride, overrideReason, reasonCodes, isOffline,
+    canVolume, fatPercent, snfPercent, temperatureC, adulterationPositive,
+    farmerId, farmerName, operatorId, operatorName
+  } = record
   
   // Format the timestamp nicely for the slip
   const dateObj = new Date(record.testPerformedAt)
   const timeString = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-  const dateString = dateObj.toLocaleDateString()
+  // Use a neat date format like "14 May 2024"
+  const dateString = dateObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
 
   return (
-    <div className="min-h-screen bg-slate-50 p-4 md:p-6 flex items-center justify-center">
-      <div className="w-full max-w-md space-y-6">
+    <div className="w-full bg-slate-50 p-4 sm:p-6 pb-24">
+      <div className="mx-auto max-w-lg space-y-5">
         
-        {isOffline && (
-          <div className="p-3 bg-amber-50 text-amber-800 border border-amber-200 rounded-lg text-sm font-medium flex items-center gap-2 shadow-sm">
-            <AlertTriangle className="w-5 h-5 shrink-0" />
-            <span>Saved Offline — Pending Sync</span>
+        {/* Page Title & Header info */}
+        <div className="flex justify-between items-end mb-2 pt-2">
+          <div>
+            <p className="text-[11px] font-extrabold text-[#0f6041] tracking-wider uppercase mb-1">Quality Grading Result</p>
+            <h2 className="text-[28px] font-extrabold text-[#052b1f] leading-none flex items-center gap-2">
+              Completed &middot; <span className={cn("text-[16px] mt-1.5", isOffline ? "text-amber-600" : "text-[#7e9e94]")}>{isOffline ? 'Syncing' : 'Synced'}</span>
+            </h2>
           </div>
-        )}
+          <div className="text-right">
+            <p className="text-[14px] font-bold text-slate-900">Target</p>
+            <p className="text-[13px] text-slate-500">under 10 sec</p>
+          </div>
+        </div>
 
-        <Card className={cn(
-          "shadow-lg border-2 overflow-hidden",
-          finalDecision === 'accepted' ? "border-emerald-200" : "border-red-200"
+        {/* Live Grading Box styled banner */}
+        <div className={cn(
+          "rounded-xl p-4 flex items-start gap-3 mt-4 border shadow-sm",
+          isOverride
+            ? "bg-amber-50 border-amber-200 text-amber-800"
+            : finalDecision === 'accepted'
+              ? "bg-[#eaf4ef] border-[#b0ebd1] text-[#0f6041]"
+              : "bg-red-50 border-red-200 text-red-700"
         )}>
-          <div className={cn(
-            "p-8 text-center text-white",
-            finalDecision === 'accepted' ? "bg-emerald-600" : "bg-red-600"
-          )}>
-            {finalDecision === 'accepted' ? (
-              <CheckCircle2 className="w-20 h-20 mx-auto mb-4 opacity-90" />
-            ) : (
-              <XCircle className="w-20 h-20 mx-auto mb-4 opacity-90" />
-            )}
-            
-            <h1 className="text-3xl font-black tracking-tight mb-2 uppercase">
+          {isOverride ? (
+            <AlertTriangle className="w-6 h-6 shrink-0 mt-0.5" />
+          ) : finalDecision === 'accepted' ? (
+            <CheckCircle2 className="w-6 h-6 shrink-0 mt-0.5" />
+          ) : (
+            <XCircle className="w-6 h-6 shrink-0 mt-0.5" />
+          )}
+          
+          <div className="flex-1">
+            <p className="text-[16px] font-bold">
               {isOverride 
-                ? `${finalDecision} — OVERRIDE`
-                : isBorderline
-                  ? `${finalDecision} — BORDERLINE`
-                  : finalDecision
-              }
-            </h1>
-            <p className="text-white/80 font-medium font-mono text-lg">{record.referenceCode}</p>
-          </div>
-
-          <CardContent className="p-6 space-y-6 bg-white">
-
+                ? `OVERRIDDEN: ${finalDecision.toUpperCase()}`
+                : finalDecision === 'accepted' ? "Milk Accepted" : "Milk Rejected"}
+            </p>
+            <p className="text-[14px] opacity-80 leading-snug mt-1 font-medium">
+              {reasonCodes.length > 0 
+                ? reasonCodes.filter(c => !c.startsWith('INVALID_')).map(code => REASON_LABELS[code as DbReasonCode] || code).join(', ')
+                : "All tests passed successfully."}
+            </p>
             {isOverride && (
-              <div className="space-y-2 border-b border-slate-100 pb-4">
-                <p className="text-sm font-bold text-slate-900">System suggestion: {autoDecision || 'Unavailable for this legacy record'}</p>
-                <p className="text-sm text-slate-700">Final decision: {finalDecision}</p>
-                <p className="text-sm text-slate-700">Override reason: {overrideReason || 'No override reason provided'}</p>
-              </div>
+               <p className="mt-2 text-sm italic opacity-80 border-t border-amber-200/50 pt-2">“{overrideReason}”</p>
             )}
-            
-            {reasonCodes.length > 0 && (
-              <div className="space-y-3">
-                <h3 className="font-bold text-slate-900 uppercase text-sm tracking-wider">Remarks</h3>
-                <ul className="space-y-2">
-                  {reasonCodes.map(code => (
-                    <li key={code} className="flex items-start gap-2 text-slate-700 font-medium">
-                      <span className="w-1.5 h-1.5 rounded-full bg-slate-400 mt-2 shrink-0"></span>
-                      {REASON_LABELS[code as DbReasonCode] || code}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
+          </div>
+        </div>
 
-            <div className="pt-6 border-t border-slate-100 flex justify-between items-end text-sm text-slate-500 font-medium">
-              <div>
-                <p>Date: {dateString}</p>
-                <p>Time: {timeString}</p>
-              </div>
+        {/* Inputs Recorded */}
+        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm space-y-4">
+          <div className="flex justify-between items-center border-b border-slate-100 pb-2 mb-3">
+            <h3 className="text-[16px] font-bold text-slate-900">Inputs Recorded</h3>
+            <span className="text-slate-400 font-mono text-[13px] font-medium">{record.referenceCode}</span>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <p className="text-[12px] text-slate-500 font-bold uppercase tracking-wider mb-1">Volume</p>
+              <p className="text-[16px] font-semibold text-slate-900">{canVolume !== undefined ? `${canVolume.toFixed(1)} L` : '--'}</p>
             </div>
-          </CardContent>
-        </Card>
+            <div>
+              <p className="text-[12px] text-slate-500 font-bold uppercase tracking-wider mb-1">Fat</p>
+              <p className="text-[16px] font-semibold text-slate-900">{fatPercent?.toFixed(2)}%</p>
+            </div>
+            <div>
+              <p className="text-[12px] text-slate-500 font-bold uppercase tracking-wider mb-1">SNF</p>
+              <p className="text-[16px] font-semibold text-slate-900">{snfPercent?.toFixed(2)}%</p>
+            </div>
+            <div>
+              <p className="text-[12px] text-slate-500 font-bold uppercase tracking-wider mb-1">Temp</p>
+              <p className="text-[16px] font-semibold text-slate-900">{temperatureC?.toFixed(1)} &deg;C</p>
+            </div>
+            <div className="col-span-2">
+              <p className="text-[12px] text-slate-500 font-bold uppercase tracking-wider mb-1">Strip</p>
+              <p className={cn("text-[16px] font-semibold", adulterationPositive ? "text-red-600" : "text-emerald-600")}>
+                {adulterationPositive ? 'FAIL (Adulterated)' : 'PASS (Clear)'}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Farmer & Operator */}
+        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm space-y-4">
+          <h3 className="text-[16px] font-bold text-slate-900 border-b border-slate-100 pb-2 mb-3">Farmer &amp; Operator</h3>
+          <div>
+            <p className="text-[12px] text-slate-500 font-bold uppercase tracking-wider mb-1">Farmer</p>
+            <p className="text-[16px] font-semibold text-slate-900">#{farmerId.substring(0,6)}, {farmerName}</p>
+          </div>
+          <div>
+            <p className="text-[12px] text-slate-500 font-bold uppercase tracking-wider mb-1">Timestamp</p>
+            <p className="text-[15px] font-medium text-slate-900">{dateString}, {timeString}</p>
+          </div>
+          <div>
+            <p className="text-[12px] text-slate-500 font-bold uppercase tracking-wider mb-1">Operator ID</p>
+            <p className="text-[15px] font-medium text-slate-900">{operatorId.substring(0,8).toUpperCase()} {operatorName ? `(${operatorName})` : ''}</p>
+          </div>
+        </div>
+
+
 
         {finalDecision === 'rejected' && (
-          <Button
-            onClick={() => router.push(`/slip/${record.referenceCode}`)}
-            className="w-full h-16 text-xl font-bold shadow-sm"
-            size="lg"
-          >
-            <Share2 className="w-6 h-6 mr-2" /> Share Rejection Slip
-          </Button>
+          <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm flex flex-col items-center justify-center mt-4">
+            <QRCodeCanvas 
+               value={typeof window !== 'undefined' ? `${window.location.origin}/lookup/${encodeURIComponent(record.referenceCode)}` : ''}
+               size={140}
+               level="M"
+               includeMargin={false}
+            />
+            <p className="mt-4 text-[12px] font-bold text-slate-500 uppercase tracking-widest text-center">
+              Scan to view this test record
+            </p>
+          </div>
         )}
-        <Button 
-          onClick={() => router.push('/')} 
-          className="w-full h-16 text-xl font-bold shadow-sm"
-          size="lg"
-        >
-          Next Can <ArrowLeft className="w-6 h-6 ml-2 rotate-180" />
-        </Button>
+
+        {/* Actions */}
+        <div className="pt-2 space-y-3">
+          {finalDecision === 'rejected' && (
+            <Button
+              onClick={() => router.push(`/slip/${record.referenceCode}`)}
+              className="w-full h-14 text-[17px] font-bold rounded-xl bg-red-600 hover:bg-red-700 text-white shadow-sm"
+            >
+              <QrCode className="w-5 h-5 mr-2" /> Share Rejection Slip
+            </Button>
+          )}
+
+          {finalDecision === 'accepted' && (
+            <Button
+              onClick={() => window.print()}
+              variant="outline"
+              className="w-full h-14 text-[17px] font-bold rounded-xl border-slate-200 bg-white hover:bg-slate-50 text-slate-800"
+            >
+              <Printer className="w-5 h-5 mr-2" /> Print Receipt
+            </Button>
+          )}
+
+          <Button 
+            onClick={() => router.push('/')} 
+            className="w-full h-14 text-[17px] font-bold rounded-xl bg-[#0f6041] hover:bg-[#0c4a32] text-white shadow-sm"
+          >
+             Next Can
+          </Button>
+        </div>
+
       </div>
     </div>
   )

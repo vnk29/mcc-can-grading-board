@@ -15,7 +15,7 @@
 
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
 import {
   getQueueSummary,
   syncPendingEntries,
@@ -24,35 +24,26 @@ import {
 } from '@/lib/offlineQueue'
 
 export interface NetworkStatus {
-  /** True when the browser reports online. */
   isOnline: boolean
-  /** Number of entries waiting to sync. */
   pendingCount: number
-  /** Number of entries that failed with DB errors. */
   failedCount: number
-  /** True while syncPendingEntries() is running. */
   isSyncing: boolean
-  /** Last sync result, if any. */
   lastSyncResult: SyncResult | null
-  /** Manually trigger sync of pending entries. */
   triggerSync: () => Promise<void>
-  /** Reset failed entries to pending and retry. */
   triggerRetry: () => Promise<void>
-  /** Refresh the queue counts from IndexedDB. */
   refreshCounts: () => Promise<void>
 }
 
-export function useNetworkStatus(): NetworkStatus {
-  const [isOnline, setIsOnline] = useState(
-    typeof navigator !== 'undefined' ? navigator.onLine : true
-  )
+const NetworkStatusContext = createContext<NetworkStatus | null>(null)
+
+export function NetworkStatusProvider({ children }: { children: React.ReactNode }) {
+  const [isOnline, setIsOnline] = useState(true)
   const [pendingCount, setPendingCount] = useState(0)
   const [failedCount, setFailedCount] = useState(0)
   const [isSyncing, setIsSyncing] = useState(false)
   const [lastSyncResult, setLastSyncResult] = useState<SyncResult | null>(null)
 
-  // Guard against concurrent syncs
-  const syncLock = useRef(false)
+  const syncQueue = useRef<Promise<void>>(Promise.resolve())
 
   const refreshCounts = useCallback(async () => {
     try {
@@ -60,52 +51,52 @@ export function useNetworkStatus(): NetworkStatus {
       setPendingCount(summary.pending)
       setFailedCount(summary.failed)
     } catch {
-      // IndexedDB may be unavailable in SSR or private browsing edge cases
+      // Ignore
     }
   }, [])
 
-  const doSync = useCallback(async () => {
-    if (syncLock.current) return
-    syncLock.current = true
-    setIsSyncing(true)
-
-    try {
-      const result = await syncPendingEntries()
-      setLastSyncResult(result)
-    } catch (err) {
-      console.error('Sync failed:', err)
-    } finally {
-      setIsSyncing(false)
-      syncLock.current = false
-      await refreshCounts()
-    }
+  const doSync = useCallback(() => {
+    syncQueue.current = syncQueue.current.then(async () => {
+      setIsSyncing(true)
+      try {
+        const result = await syncPendingEntries()
+        setLastSyncResult(result)
+      } catch (err) {
+        console.error('Sync failed:', err)
+      } finally {
+        setIsSyncing(false)
+        await refreshCounts()
+      }
+    })
+    return syncQueue.current
   }, [refreshCounts])
 
   const triggerSync = useCallback(async () => {
     await doSync()
   }, [doSync])
 
-  const triggerRetry = useCallback(async () => {
-    if (syncLock.current) return
-    syncLock.current = true
-    setIsSyncing(true)
-
-    try {
-      const result = await retryFailedEntries()
-      setLastSyncResult(result)
-    } catch (err) {
-      console.error('Retry failed:', err)
-    } finally {
-      setIsSyncing(false)
-      syncLock.current = false
-      await refreshCounts()
-    }
+  const triggerRetry = useCallback(() => {
+    syncQueue.current = syncQueue.current.then(async () => {
+      setIsSyncing(true)
+      try {
+        const result = await retryFailedEntries()
+        setLastSyncResult(result)
+      } catch (err) {
+        console.error('Retry failed:', err)
+      } finally {
+        setIsSyncing(false)
+        await refreshCounts()
+      }
+    })
+    return syncQueue.current
   }, [refreshCounts])
 
   useEffect(() => {
-    // Initial count refresh
+    if (typeof navigator !== 'undefined') {
+      setIsOnline(navigator.onLine)
+    }
+
     refreshCounts().then(() => {
-      // Auto-sync on startup if online
       if (typeof navigator !== 'undefined' && navigator.onLine) {
         doSync()
       }
@@ -113,7 +104,6 @@ export function useNetworkStatus(): NetworkStatus {
 
     const handleOnline = () => {
       setIsOnline(true)
-      // Auto-sync when connectivity returns
       doSync()
     }
 
@@ -130,14 +120,28 @@ export function useNetworkStatus(): NetworkStatus {
     }
   }, [doSync, refreshCounts])
 
-  return {
-    isOnline,
-    pendingCount,
-    failedCount,
-    isSyncing,
-    lastSyncResult,
-    triggerSync,
-    triggerRetry,
-    refreshCounts,
+  return (
+    <NetworkStatusContext.Provider
+      value={{
+        isOnline,
+        pendingCount,
+        failedCount,
+        isSyncing,
+        lastSyncResult,
+        triggerSync,
+        triggerRetry,
+        refreshCounts,
+      }}
+    >
+      {children}
+    </NetworkStatusContext.Provider>
+  )
+}
+
+export function useNetworkStatus(): NetworkStatus {
+  const context = useContext(NetworkStatusContext)
+  if (!context) {
+    throw new Error('useNetworkStatus must be used within a NetworkStatusProvider')
   }
+  return context
 }

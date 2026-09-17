@@ -56,7 +56,7 @@ export async function getPendingEntries(): Promise<CanTestEntry[]> {
     .sort((a, b) => {
       const timeA = a.queuedAt || a.testPerformedAt || ''
       const timeB = b.queuedAt || b.testPerformedAt || ''
-      return timeA.localeCompare(timeB)
+      return timeA < timeB ? -1 : (timeA > timeB ? 1 : 0)
     })
 }
 
@@ -144,7 +144,7 @@ export function toAppEntry(entry: CanTestEntry): CanTestAppEntry {
     decision: entry.finalDecision,
     isBorderline: entry.isBorderline,
     borderlineFlags: entry.borderlineFlags,
-    reasonCodes: entry.reasonCodes,
+    reasonCodes: (entry.reasonCodes as string[]).filter(c => !c.startsWith('INVALID_')) as import('@/types/database').DbReasonCode[],
     isOverride: entry.isOverride,
     overrideReason: entry.overrideReason ?? null,
     referenceCode: entry.referenceCode,

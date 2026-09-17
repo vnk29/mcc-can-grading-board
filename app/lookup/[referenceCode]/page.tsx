@@ -2,15 +2,14 @@
 
 import React, { useEffect, useState, use } from 'react'
 import { useRouter } from 'next/navigation'
-import { Loader2, ArrowLeft, ArrowRight, CheckCircle2, XCircle, AlertTriangle, AlertCircle, FileEdit, User, WifiOff } from 'lucide-react'
+import { Loader2, ArrowLeft, ArrowRight, CheckCircle2, XCircle, AlertTriangle, AlertCircle, FileEdit, QrCode } from 'lucide-react'
+import { QRCodeCanvas } from 'qrcode.react'
 import { format } from 'date-fns'
 
 import { supabase } from '@/lib/supabase'
 import { REASON_LABELS } from '@/lib/grading'
-import { MIN_FAT_PERCENT, MIN_SNF_PERCENT, MAX_TEMPERATURE_C } from '@/lib/config'
-import type { CanTestWithDetails, CorrectionWithOperator } from '@/types/database'
+import type { CanTestWithDetails, CorrectionWithOperator, DbReasonCode } from '@/types/database'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -256,6 +255,7 @@ export default function RecordDetailPage({
         p_operator_id: activeOperatorId,
         p_pin: activePin,
         p_can_test_id: record.id,
+        p_old_values: oldValues,
         p_new_values: newValues,
         p_reason: correctionReason.trim()
       })
@@ -318,254 +318,217 @@ export default function RecordDetailPage({
   }
 
   const dateObj = new Date(record.test_performed_at)
-  const isAccepted = record.decision === 'accepted'
-
   return (
     <div className="min-h-screen bg-slate-50 pb-24">
-      {/* Top Nav */}
-      <div className="bg-white border-b sticky top-0 z-10">
-        <div className="max-w-2xl mx-auto px-4 h-16 flex items-center justify-between">
-          <Button variant="ghost" className="-ml-2 text-slate-600" onClick={() => router.push('/lookup')}>
-            <ArrowLeft className="w-5 h-5 mr-2" /> Back
-          </Button>
-          <div className="font-mono font-bold text-slate-800">{record.reference_code}</div>
+      <div className="w-full bg-white border-b border-slate-200">
+        <div className="max-w-lg mx-auto px-4 h-14 flex items-center">
+          <button onClick={() => router.push('/lookup')} className="flex items-center text-[#0f6041] font-bold text-[15px] hover:underline">
+            <ArrowLeft className="w-5 h-5 mr-1" /> Back to Ledger
+          </button>
         </div>
       </div>
 
-      <div className="max-w-2xl mx-auto p-4 sm:p-6 space-y-6">
-        
-        {isOfflineRecord && (
-          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-start gap-3">
-            <WifiOff className="w-5 h-5 text-amber-600 mt-0.5 shrink-0" />
-            <div>
-              <h3 className="font-bold text-amber-900">Saved Offline — Pending Sync</h3>
-              <p className="text-sm text-amber-800 mt-1">
-                This record is stored securely on your device but hasn&apos;t reached the server yet. Amendments are disabled until it syncs.
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* Trust Label */}
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-start gap-3">
-          <AlertCircle className="w-5 h-5 text-blue-600 mt-0.5 shrink-0" />
+      <div className="max-w-lg mx-auto p-4 sm:p-6 space-y-5 mt-2">
+        {/* Header Info */}
+        <div className="flex justify-between items-end mb-2 pt-2">
           <div>
-            <h3 className="font-bold text-blue-900">Original test record</h3>
-            <p className="text-sm text-blue-800 mt-1">
-              This record shows the values recorded when the milk was tested. The original entry cannot be edited.
-            </p>
+            <p className="text-[11px] font-extrabold text-[#0f6041] tracking-wider uppercase mb-1">Record Detail</p>
+            <h2 className="text-[28px] font-extrabold text-[#052b1f] leading-none flex items-center gap-2">
+              Status: <span className={cn("text-[16px] mt-1.5", isOfflineRecord ? "text-amber-600" : "text-[#7e9e94]")}>{isOfflineRecord ? 'Pending Sync' : 'Synced'}</span>
+            </h2>
+          </div>
+          <div className="text-right">
+            <p className="text-[14px] font-bold text-slate-900">Record ID</p>
+            <p className="text-[13px] text-slate-500 font-mono">{record.reference_code}</p>
           </div>
         </div>
 
-        {/* Core Info */}
-        <Card className="shadow-sm border-slate-200">
-          <CardHeader className="bg-slate-50 border-b pb-4 rounded-t-xl">
-            <div className="flex items-center justify-between mb-1">
-               <CardDescription className="uppercase tracking-widest font-bold text-slate-500 text-xs">
-                 Farmer Details
-               </CardDescription>
-               <span className="text-xs font-mono font-medium text-slate-500">#{record.farmer_id.substring(0,8)}</span>
-            </div>
-            <CardTitle className="text-2xl">{record.farmer?.name}</CardTitle>
-          </CardHeader>
-          <CardContent className="pt-6 grid grid-cols-2 gap-y-6 gap-x-4">
-            <div>
-              <span className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Tested Date & Time</span>
-              <span className="font-semibold text-slate-900">{format(dateObj, 'MMM d, yyyy h:mm a')}</span>
-            </div>
-            <div>
-               <span className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Tested By (Operator)</span>
-               <div className="flex items-center font-semibold text-slate-900">
-                 <User className="w-4 h-4 mr-1.5 text-slate-400" />
-                 {record.operator?.name}
-               </div>
-            </div>
-          </CardContent>
-        </Card>
+        {isOfflineRecord && (
+          <div className="p-3 bg-amber-50 text-amber-800 border border-amber-200 rounded-xl text-[14px] font-medium flex items-start gap-2 shadow-sm">
+            <AlertTriangle className="w-5 h-5 shrink-0" />
+            <span>Saved Offline. Amendments are disabled until it syncs.</span>
+          </div>
+        )}
 
-        {/* Test Values */}
-        <Card className="shadow-sm border-slate-200">
-          <CardHeader className="border-b pb-4">
-            <CardTitle className="text-lg">Physical Readings</CardTitle>
-          </CardHeader>
-          <CardContent className="pt-6">
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
-              {record.can_volume !== null && record.can_volume !== undefined && (
-                 <div className="flex flex-col">
-                   <span className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Volume</span>
-                   <span className="text-xl font-black text-slate-900">{record.can_volume.toFixed(1)} L</span>
-                 </div>
-              )}
-              <div className="flex flex-col">
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Fat</span>
-                <span className="text-xl font-black text-slate-900">{record.fat_percent.toFixed(2)}%</span>
-              </div>
-              <div className="flex flex-col">
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">SNF</span>
-                <span className="text-xl font-black text-slate-900">{record.snf_percent.toFixed(2)}%</span>
-              </div>
-              <div className="flex flex-col">
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Temp</span>
-                <span className="text-xl font-black text-slate-900">{record.temperature.toFixed(1)}°C</span>
-              </div>
-              <div className="flex flex-col">
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Adulteration</span>
-                <span className={cn("text-xl font-black", record.adulteration_result ? "text-red-600" : "text-emerald-600")}>
-                  {record.adulteration_result ? 'FAIL' : 'PASS'}
-                </span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        {/* Live Grading Box styled banner */}
+        <div className={cn(
+          "rounded-xl p-4 flex items-start gap-3 mt-4 border shadow-sm",
+          record.is_override
+            ? "bg-amber-50 border-amber-200 text-amber-800"
+            : record.decision === 'accepted'
+              ? "bg-[#eaf4ef] border-[#b0ebd1] text-[#0f6041]"
+              : "bg-red-50 border-red-200 text-red-700"
+        )}>
+          {record.is_override ? (
+            <AlertTriangle className="w-6 h-6 shrink-0 mt-0.5" />
+          ) : record.decision === 'accepted' ? (
+            <CheckCircle2 className="w-6 h-6 shrink-0 mt-0.5" />
+          ) : (
+            <XCircle className="w-6 h-6 shrink-0 mt-0.5" />
+          )}
+          
+          <div className="flex-1">
+            <p className="text-[16px] font-bold">
+              {record.is_override 
+                ? `OVERRIDDEN: ${record.decision.toUpperCase()}`
+                : record.decision === 'accepted' ? "Milk Accepted" : "Milk Rejected"}
+            </p>
+            <p className="text-[14px] opacity-80 leading-snug mt-1 font-medium">
+              {record.reason_codes && record.reason_codes.length > 0 
+                ? record.reason_codes.filter(c => !c.startsWith('INVALID_')).map(code => REASON_LABELS[code as DbReasonCode] || code).join(', ')
+                : "All tests passed successfully."}
+            </p>
+            {record.is_override && (
+               <p className="mt-2 text-[14px] italic opacity-80 border-t border-amber-200/50 pt-2">“{record.override_reason}”</p>
+            )}
+          </div>
+        </div>
 
-        {/* Decision Area */}
-        <Card className="shadow-sm border-slate-200 overflow-hidden">
-          <div className={cn(
-             "p-6 text-white flex items-start gap-4",
-             isAccepted ? "bg-emerald-600" : "bg-red-600"
-          )}>
-            {isAccepted ? <CheckCircle2 className="w-8 h-8 shrink-0 opacity-90" /> : <XCircle className="w-8 h-8 shrink-0 opacity-90" />}
-            <div>
-               <span className="block text-xs font-bold text-white/70 uppercase tracking-wider mb-1">Final Decision</span>
-               <h2 className="text-2xl font-black uppercase tracking-tight">
-                 {isAccepted ? 'ACCEPTED' : 'REJECTED'}
-                 {record.is_override && ' — OVERRIDE'}
-               </h2>
-            </div>
+        {/* Inputs Recorded */}
+        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm space-y-4">
+          <div className="flex justify-between items-center border-b border-slate-100 pb-2 mb-3">
+            <h3 className="text-[16px] font-bold text-slate-900">Inputs Recorded</h3>
+            <span className="text-slate-400 font-mono text-[13px] font-medium">{record.reference_code}</span>
           </div>
           
-          <CardContent className="p-0">
-            {/* System Suggestion & Overrides */}
-            {record.is_override && (
-               <div className="p-6 border-b bg-slate-50/50 space-y-4">
-                 <div>
-                   <span className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">System Suggestion</span>
-                   <span className="text-lg font-bold text-slate-400 line-through uppercase">
-                     {record.auto_decision ? record.auto_decision : 'Unavailable'}
-                   </span>
-                 </div>
-                 <div>
-                   <span className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Override Reason</span>
-                   <span className="text-base font-medium text-slate-900 italic">&quot;{record.override_reason}&quot;</span>
-                 </div>
-               </div>
-            )}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <p className="text-[12px] text-slate-500 font-bold uppercase tracking-wider mb-1">Volume</p>
+              <p className="text-[16px] font-semibold text-slate-900">{record.can_volume !== null && record.can_volume !== undefined ? `${record.can_volume.toFixed(1)} L` : '--'}</p>
+            </div>
+            <div>
+              <p className="text-[12px] text-slate-500 font-bold uppercase tracking-wider mb-1">Fat</p>
+              <p className="text-[16px] font-semibold text-slate-900">{record.fat_percent?.toFixed(2)}%</p>
+            </div>
+            <div>
+              <p className="text-[12px] text-slate-500 font-bold uppercase tracking-wider mb-1">SNF</p>
+              <p className="text-[16px] font-semibold text-slate-900">{record.snf_percent?.toFixed(2)}%</p>
+            </div>
+            <div>
+              <p className="text-[12px] text-slate-500 font-bold uppercase tracking-wider mb-1">Temp</p>
+              <p className="text-[16px] font-semibold text-slate-900">{record.temperature?.toFixed(1)} &deg;C</p>
+            </div>
+            <div className="col-span-2">
+              <p className="text-[12px] text-slate-500 font-bold uppercase tracking-wider mb-1">Strip</p>
+              <p className={cn("text-[16px] font-semibold", record.adulteration_result ? "text-red-600" : "text-emerald-600")}>
+                {record.adulteration_result ? 'FAIL (Adulterated)' : 'PASS (Clear)'}
+              </p>
+            </div>
+          </div>
+        </div>
 
-            {/* Borderline Review State */}
-            {record.is_borderline && (
-               <div className="p-6 border-b bg-amber-50">
-                 <div className="flex items-center gap-2 mb-2">
-                   <AlertTriangle className="w-5 h-5 text-amber-600" />
-                   <h3 className="font-bold text-amber-900 tracking-tight">BORDERLINE — REVIEW</h3>
-                 </div>
-                 <p className="text-sm text-amber-800 font-medium mb-2">
-                   This test contained measurements that were very close to the rejection thresholds.
-                 </p>
-                 {record.borderline_flags && record.borderline_flags.length > 0 && (
-                    <ul className="list-disc pl-5 text-sm text-amber-900 space-y-1">
-                      {record.borderline_flags.includes('LOW_FAT') && (
-                        <li>Fat {record.fat_percent.toFixed(2)}% is near the {MIN_FAT_PERCENT.toFixed(2)}% limit</li>
-                      )}
-                      {record.borderline_flags.includes('LOW_SNF') && (
-                        <li>SNF {record.snf_percent.toFixed(2)}% is near the {MIN_SNF_PERCENT.toFixed(2)}% limit</li>
-                      )}
-                      {record.borderline_flags.includes('HIGH_TEMPERATURE') && (
-                        <li>Temperature {record.temperature.toFixed(1)}°C is near the {MAX_TEMPERATURE_C.toFixed(1)}°C limit</li>
-                      )}
-                    </ul>
-                 )}
-               </div>
-            )}
+        {/* Farmer & Operator */}
+        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm space-y-4">
+          <h3 className="text-[16px] font-bold text-slate-900 border-b border-slate-100 pb-2 mb-3">Farmer &amp; Operator</h3>
+          <div>
+            <p className="text-[12px] text-slate-500 font-bold uppercase tracking-wider mb-1">Farmer</p>
+            <p className="text-[16px] font-semibold text-slate-900">#{record.farmer_id.substring(0,6)}, {record.farmer?.name}</p>
+          </div>
+          <div>
+            <p className="text-[12px] text-slate-500 font-bold uppercase tracking-wider mb-1">Timestamp</p>
+            <p className="text-[15px] font-medium text-slate-900">{format(dateObj, 'dd MMM yyyy, hh:mm a')}</p>
+          </div>
+          <div>
+            <p className="text-[12px] text-slate-500 font-bold uppercase tracking-wider mb-1">Operator ID</p>
+            <p className="text-[15px] font-medium text-slate-900">{record.operator_id.substring(0,8).toUpperCase()} {record.operator?.name ? `(${record.operator.name})` : ''}</p>
+          </div>
+        </div>
 
-            {/* Reasons */}
-            {record.reason_codes && record.reason_codes.length > 0 && (
-              <div className="p-6">
-                 <span className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Rejection Remarks</span>
-                 <ul className="space-y-2">
-                   {record.reason_codes.map(code => (
-                     <li key={code} className="flex items-center text-slate-700 font-medium">
-                       <span className="mr-3 w-1.5 h-1.5 bg-slate-300 rounded-full shrink-0"></span>
-                       {REASON_LABELS[code] || code}
-                     </li>
-                   ))}
-                 </ul>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        {record.decision === 'rejected' && (
+          <div className="pt-2 pb-2 space-y-4">
+            <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm flex flex-col items-center justify-center">
+              <QRCodeCanvas 
+                 value={typeof window !== 'undefined' ? `${window.location.origin}/lookup/${encodeURIComponent(record.reference_code)}` : ''}
+                 size={140}
+                 level="M"
+                 includeMargin={false}
+              />
+              <p className="mt-4 text-[12px] font-bold text-slate-500 uppercase tracking-widest text-center">
+                Scan to view this test record
+              </p>
+            </div>
+            
+            <Button
+              onClick={() => router.push(`/slip/${record.reference_code}`)}
+              className="w-full h-14 text-[17px] font-bold rounded-xl bg-red-600 hover:bg-red-700 text-white shadow-sm"
+            >
+              <QrCode className="w-5 h-5 mr-2" /> View Rejection Slip
+            </Button>
+          </div>
+        )}
 
-         <div className="mt-8">
-           <div className="flex items-center justify-between mb-4">
-             <h3 className="font-bold text-lg text-slate-900">Amendment History</h3>
-             {!isOfflineRecord && (
-               <Button variant="outline" size="sm" onClick={handleOpenCorrection} className="font-bold">
-                 <FileEdit className="w-4 h-4 mr-2" /> Request Correction
-               </Button>
-             )}
-           </div>
-           
-           {corrections.length === 0 ? (
-             <div className="p-8 text-center border-2 border-dashed border-slate-200 rounded-xl bg-white text-slate-500">
-               <FileEdit className="w-8 h-8 mx-auto mb-3 opacity-20" />
-               <p className="font-semibold text-slate-700">No amendments</p>
-               <p className="text-sm mt-1">This original record has not been corrected.</p>
-             </div>
-           ) : (
+        {/* Amendments */}
+        <div className="mt-8 border-t border-slate-200 pt-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-bold text-[18px] text-slate-900">Amendments</h3>
+            {!isOfflineRecord && (
+              <button 
+                onClick={handleOpenCorrection} 
+                className="flex items-center text-[#0f6041] font-bold text-[14px] hover:underline"
+              >
+                <FileEdit className="w-4 h-4 mr-1.5" /> Request Correction
+              </button>
+            )}
+          </div>
+          
+          {corrections.length === 0 ? (
+            <div className="p-6 text-center border-2 border-dashed border-slate-200 rounded-xl bg-white text-slate-500">
+              <p className="font-medium text-[15px] text-slate-600">No amendments</p>
+              <p className="text-[13px] mt-1">This original record has not been corrected.</p>
+            </div>
+          ) : (
              <div className="space-y-4">
                {corrections.map((corr, idx) => (
                  <div key={corr.id} className="relative">
-                    {/* Visual timeline line */}
                     {idx === 0 && <div className="absolute -top-3 left-6 w-0.5 h-3 bg-slate-200"></div>}
                     <div className="absolute -bottom-4 left-6 w-0.5 h-4 bg-slate-200 last:hidden"></div>
                     
-                    <Card className="border-blue-100 shadow-sm relative z-10">
-                      <CardHeader className="bg-blue-50/50 pb-3 py-3 border-b border-blue-100">
-                        <div className="flex items-center justify-between">
-                           <div className="flex items-center gap-2">
-                             <FileEdit className="w-4 h-4 text-blue-600" />
-                             <CardTitle className="text-sm font-bold text-blue-900 uppercase tracking-widest">
-                               AMENDMENT
-                             </CardTitle>
-                           </div>
-                           <span className="text-xs font-semibold text-slate-500">
-                             {format(new Date(corr.created_at), 'MMM d, h:mm a')}
+                    <div className="border border-blue-200 rounded-xl bg-white shadow-sm relative z-10 overflow-hidden">
+                      <div className="bg-blue-50/50 px-4 py-3 border-b border-blue-100 flex items-center justify-between">
+                         <div className="flex items-center gap-2">
+                           <FileEdit className="w-4 h-4 text-blue-600" />
+                           <span className="text-[13px] font-bold text-blue-900 uppercase tracking-widest">
+                             AMENDMENT
                            </span>
-                        </div>
-                      </CardHeader>
-                      <CardContent className="pt-4 space-y-3">
+                         </div>
+                         <span className="text-[12px] font-semibold text-slate-500">
+                           {format(new Date(corr.created_at), 'MMM d, h:mm a')}
+                         </span>
+                      </div>
+                      <div className="p-4 space-y-3">
                          <div>
-                           <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-0.5">Corrected By</span>
-                           <span className="font-medium text-slate-900">{corr.operator?.name}</span>
+                           <span className="text-[12px] font-bold text-slate-500 uppercase tracking-wider block mb-0.5">Corrected By</span>
+                           <span className="font-medium text-[15px] text-slate-900">{corr.operator?.name}</span>
                          </div>
                          <div>
-                           <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-0.5">Reason for Amendment</span>
-                           <span className="font-medium text-slate-900 italic">&quot;{corr.reason}&quot;</span>
+                           <span className="text-[12px] font-bold text-slate-500 uppercase tracking-wider block mb-0.5">Reason for Amendment</span>
+                           <span className="font-medium text-[15px] text-slate-900 italic">“{corr.reason}”</span>
                          </div>
-                         <div className="pt-2 border-t mt-3">
-                           <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-2">Changed Values</span>
-                           <div className="grid grid-cols-2 gap-2 text-sm">
+                         <div className="pt-3 border-t mt-3">
+                           <span className="text-[12px] font-bold text-slate-500 uppercase tracking-wider block mb-2">Changed Values</span>
+                           <div className="grid grid-cols-2 gap-2">
                               {Object.entries(corr.new_values).map(([key, value]) => {
                                  const oldVal = corr.old_values[key]
                                  if (oldVal === value) return null
                                  return (
-                                   <div key={key} className="col-span-2 sm:col-span-1 bg-slate-50 p-2 rounded border font-mono">
-                                      <div className="text-xs text-slate-500 font-sans font-bold uppercase mb-1">{key.replace('_', ' ')}</div>
+                                   <div key={key} className="col-span-2 sm:col-span-1 bg-slate-50 p-3 rounded-lg border font-mono">
+                                      <div className="text-[11px] text-slate-500 font-sans font-bold uppercase mb-1">{key.replace('_', ' ')}</div>
                                       <div className="flex items-center gap-2">
-                                        <span className="line-through text-slate-400">{String(oldVal)}</span>
+                                        <span className="line-through text-slate-400 text-[14px]">{String(oldVal)}</span>
                                         <ArrowRight className="w-3 h-3 text-blue-500" />
-                                        <span className="font-bold text-blue-700">{String(value)}</span>
+                                        <span className="font-bold text-blue-700 text-[14px]">{String(value)}</span>
                                       </div>
                                    </div>
                                  )
                               })}
                            </div>
                          </div>
-                      </CardContent>
-                    </Card>
+                      </div>
+                    </div>
                  </div>
                ))}
              </div>
-           )}
+          )}
         </div>
       </div>
 

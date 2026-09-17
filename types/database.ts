@@ -191,8 +191,8 @@ export type CorrectionInsert = {
 
 /** A can test row joined with farmer and operator names (for display). */
 export interface CanTestWithDetails extends CanTestRow {
-  farmer: Pick<FarmerRow, 'name' | 'phone' | 'village'>
-  operator: Pick<OperatorRow, 'name'>
+  farmer: Pick<FarmerRow, 'name' | 'phone' | 'village'> | null
+  operator: Pick<OperatorRow, 'name'> | null
 }
 
 /** A correction row joined with the correcting operator's name. */
@@ -273,6 +273,7 @@ export type Database = {
           p_operator_id: string
           p_pin: string
           p_can_test_id: string
+          p_old_values: Record<string, unknown>
           p_new_values: Record<string, unknown>
           p_reason: string
         }

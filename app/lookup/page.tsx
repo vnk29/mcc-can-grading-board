@@ -2,16 +2,16 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { Search, Loader2, AlertCircle, ArrowRight, FilterX, Calendar, WifiOff, CloudOff, CheckCircle2 } from 'lucide-react'
+import { Search, Loader2, AlertCircle, FilterX, Calendar, WifiOff, CloudOff, CheckCircle2 } from 'lucide-react'
 import { format } from 'date-fns'
 
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
 import { getPendingEntries } from '@/lib/offlineQueue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+import { AddFarmerDialog } from '@/components/AddFarmerDialog'
 import type { CanTestWithDetails } from '@/types/database'
 import { cn } from '@/lib/utils'
 
@@ -38,6 +38,8 @@ export default function LookupSearchPage() {
   const [hasSearched, setHasSearched] = useState(false)
   const [results, setResults] = useState<UnifiedRecord[]>([])
   const [error, setError] = useState<string | null>(null)
+  
+  const [isAddFarmerOpen, setIsAddFarmerOpen] = useState(false)
 
   const handleSearch = useCallback(async (e?: React.FormEvent) => {
     if (e) e.preventDefault()
@@ -65,7 +67,7 @@ export default function LookupSearchPage() {
           if (text.toUpperCase().includes('MCC-')) {
             query = query.ilike('reference_code', `%${text.toUpperCase()}%`)
           } else {
-            query = query.ilike('farmers.name', `%${text}%`)
+            query = query.ilike('farmer.name', `%${text}%`)
           }
         }
 
@@ -181,82 +183,74 @@ export default function LookupSearchPage() {
   const pendingCans = results.filter(r => r.sync_status === 'pending' || r.sync_status === 'failed').length
 
   return (
-    <div className="min-h-screen bg-slate-50 p-3 sm:p-4 md:p-8">
-      <div className="max-w-3xl mx-auto space-y-4">
-        
-        {/* Header */}
-        <div className="flex flex-wrap items-center justify-between gap-4">
+    <div className="min-h-screen bg-slate-50 pb-24">
+      {/* Top Header */}
+      <div className="bg-white border-b border-slate-200 sticky top-16 z-10 shadow-sm">
+        <div className="max-w-xl mx-auto px-4 py-4 flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900">Records</h1>
-            <p className="text-sm text-slate-500 font-medium">Daily ledger & dispute lookup</p>
+            <h1 className="text-[22px] font-extrabold text-[#052b1f] tracking-tight">Daily Ledger</h1>
+            <p className="text-[13px] text-slate-500 font-medium">Today&apos;s Intake</p>
           </div>
-          <Button variant="outline" onClick={() => router.push('/')}>
-            Back to Intake
+          <Button 
+            className="bg-[#0f6041] hover:bg-[#0a422c] text-white font-bold h-9 px-4 rounded-md shadow-sm"
+            onClick={() => setIsAddFarmerOpen(true)}
+          >
+            + Add Farmer
           </Button>
         </div>
+      </div>
 
+      <div className="max-w-xl mx-auto p-4 space-y-4">
         {/* Search Form */}
         <Card className="shadow-sm border-slate-200">
-          <CardContent className="pt-6">
-            <form onSubmit={handleSearch} className="space-y-4">
-              
-              <div className="space-y-1.5">
-                <Label htmlFor="search" className="text-xs font-bold uppercase text-slate-500">Farmer Name or Reference</Label>
+          <CardContent className="p-4">
+            <form onSubmit={handleSearch} className="space-y-3">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+                <Input 
+                  id="search"
+                  placeholder="Search by ID or Farmer name..." 
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10 h-12 text-base bg-slate-50 border-slate-200 rounded-lg focus-visible:ring-[#0f6041]"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
                 <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                   <Input 
-                    id="search"
-                    placeholder="e.g. Ram or MCC-..." 
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-10 h-12 text-base bg-slate-50"
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="pl-9 h-11 bg-slate-50 text-sm border-slate-200 rounded-lg focus-visible:ring-[#0f6041]"
+                  />
+                </div>
+                <div className="relative">
+                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                  <Input 
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="pl-9 h-11 bg-slate-50 text-sm border-slate-200 rounded-lg focus-visible:ring-[#0f6041]"
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label htmlFor="startDate" className="text-xs font-bold uppercase text-slate-500">Start Date</Label>
-                  <div className="relative">
-                    <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                    <Input 
-                      id="startDate"
-                      type="date"
-                      value={startDate}
-                      onChange={(e) => setStartDate(e.target.value)}
-                      className="pl-9 h-11 bg-slate-50 text-sm"
-                    />
-                  </div>
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="endDate" className="text-xs font-bold uppercase text-slate-500">End Date</Label>
-                  <div className="relative">
-                    <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                    <Input 
-                      id="endDate"
-                      type="date"
-                      value={endDate}
-                      onChange={(e) => setEndDate(e.target.value)}
-                      className="pl-9 h-11 bg-slate-50 text-sm"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex gap-2 pt-2">
+              <div className="flex gap-2">
                 <Button 
                   type="button" 
                   variant="outline" 
                   onClick={clearFilters}
                   aria-label="Clear filters"
-                  className="h-11 px-4 shrink-0"
+                  className="h-11 px-4 shrink-0 border-slate-200 text-slate-600"
                   disabled={!searchQuery && !startDate && !endDate}
                 >
                   <FilterX className="h-4 w-4" />
                 </Button>
                 <Button 
                   type="submit" 
-                  className="h-11 flex-1 font-bold"
+                  className="h-11 flex-1 font-bold bg-[#0f6041] hover:bg-[#0a422c] text-white"
                   disabled={isSearching}
                 >
                   {isSearching ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Search className="h-4 w-4 mr-2" />}
@@ -268,44 +262,44 @@ export default function LookupSearchPage() {
         </Card>
 
         {/* Results Area */}
-        <div className="space-y-4 pb-20">
+        <div className="space-y-4">
           
           {error && (
-            <div className="p-4 bg-red-50 text-red-700 border border-red-200 rounded-lg text-sm font-medium flex items-center justify-between">
+            <div className="p-4 bg-red-50 text-red-700 border border-red-200 rounded-xl text-sm font-medium flex items-center justify-between shadow-sm">
               <div className="flex items-center gap-2">
                 <AlertCircle className="w-5 h-5 shrink-0" />
                 {error}
               </div>
-              <Button variant="outline" size="sm" onClick={() => handleSearch()} className="bg-white">Retry</Button>
+              <Button variant="outline" size="sm" onClick={() => handleSearch()} className="bg-white border-red-200 hover:bg-red-50">Retry</Button>
             </div>
           )}
 
           {isSearching && results.length === 0 && !error && (
             <div className="space-y-3 pt-2">
-              <Skeleton className="w-full h-[90px] rounded-xl" />
-              <Skeleton className="w-full h-[90px] rounded-xl" />
-              <Skeleton className="w-full h-[90px] rounded-xl" />
+              <Skeleton className="w-full h-[140px] rounded-xl" />
+              <Skeleton className="w-full h-[140px] rounded-xl" />
+              <Skeleton className="w-full h-[140px] rounded-xl" />
             </div>
           )}
 
           {/* Today Summary */}
           {!isSearching && !error && results.length > 0 && (
-            <div className="grid grid-cols-4 gap-2 mb-4">
-              <div className="bg-white p-2 rounded-xl border shadow-sm flex flex-col items-center justify-center text-center">
+            <div className="grid grid-cols-4 gap-2 mb-2">
+              <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm flex flex-col items-center justify-center text-center">
                 <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">Total</span>
-                <span className="text-lg sm:text-xl font-black text-slate-900">{totalCans}</span>
+                <span className="text-xl font-black text-slate-900">{totalCans}</span>
               </div>
-              <div className="bg-emerald-50 p-2 rounded-xl border border-emerald-100 shadow-sm flex flex-col items-center justify-center text-center">
-                <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider mb-0.5">Accepted</span>
-                <span className="text-lg sm:text-xl font-black text-emerald-900">{acceptedCans}</span>
+              <div className="bg-[#eaf4ef] p-3 rounded-xl border border-[#b0ebd1] shadow-sm flex flex-col items-center justify-center text-center">
+                <span className="text-[10px] font-bold text-[#0f6041] uppercase tracking-wider mb-0.5">Accepted</span>
+                <span className="text-xl font-black text-[#052b1f]">{acceptedCans}</span>
               </div>
-              <div className="bg-red-50 p-2 rounded-xl border border-red-100 shadow-sm flex flex-col items-center justify-center text-center">
+              <div className="bg-red-50 p-3 rounded-xl border border-red-100 shadow-sm flex flex-col items-center justify-center text-center">
                 <span className="text-[10px] font-bold text-red-700 uppercase tracking-wider mb-0.5">Rejected</span>
-                <span className="text-lg sm:text-xl font-black text-red-900">{rejectedCans}</span>
+                <span className="text-xl font-black text-red-900">{rejectedCans}</span>
               </div>
-              <div className="bg-amber-50 p-2 rounded-xl border border-amber-100 shadow-sm flex flex-col items-center justify-center text-center">
+              <div className="bg-amber-50 p-3 rounded-xl border border-amber-100 shadow-sm flex flex-col items-center justify-center text-center">
                 <span className="text-[10px] font-bold text-amber-700 uppercase tracking-wider mb-0.5">Pending</span>
-                <span className="text-lg sm:text-xl font-black text-amber-900">{pendingCans}</span>
+                <span className="text-xl font-black text-amber-900">{pendingCans}</span>
               </div>
             </div>
           )}
@@ -319,70 +313,74 @@ export default function LookupSearchPage() {
           )}
 
           {results.length > 0 && (
-            <div className="space-y-2">
-              
+            <div className="space-y-3">
               {results.map((record) => {
                 const date = new Date(record.test_performed_at)
+                const isAccepted = record.decision === 'accepted'
                 
                 return (
                   <button
                     key={record.id}
                     onClick={() => router.push(`/lookup/${record.reference_code}`)}
-                    className="w-full text-left bg-white p-3.5 sm:p-4 rounded-xl border border-slate-200 shadow-sm hover:shadow-md hover:border-blue-300 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 flex items-center justify-between group"
+                    className="w-full text-left bg-white p-4 rounded-xl border border-slate-200 shadow-sm hover:shadow-md hover:border-[#0f6041]/40 transition-all focus:outline-none focus:ring-2 focus:ring-[#0f6041] block relative"
                   >
-                    <div className="space-y-1.5 flex-1 pr-3">
-                      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-                         <div className="flex items-center gap-2">
-                           <span className="text-sm font-semibold text-slate-500">
-                             {format(date, 'HH:mm')}
-                           </span>
-                           <h3 className="font-bold text-slate-900 text-base line-clamp-1">{record.farmer_name}</h3>
-                         </div>
-                         <span className="text-[11px] font-mono font-medium text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded shrink-0">
-                           {record.reference_code}
-                         </span>
-                      </div>
-                      
-                      <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5">
+                    <div className="flex justify-between items-start mb-2">
+                      <span className="text-[13px] font-bold text-slate-500 font-mono">
+                        Can ID: <span className="text-slate-800">{record.reference_code}</span>
+                      </span>
+                      <span className="text-[12px] font-semibold text-slate-400">
+                        {format(date, 'hh:mm a')}
+                      </span>
+                    </div>
+
+                    <div className="mb-3 border-b border-slate-100 pb-3">
+                      <p className="text-[15px] font-bold text-slate-900">
+                        Farmer: {record.farmer_name}
+                      </p>
+                    </div>
+                    
+                    <div className="flex justify-between items-center">
+                      <div className="flex gap-4">
+                        {/* We don't have all inputs available in the UnifiedRecord type, 
+                            so we'll simulate the look, or we can just fetch everything.
+                            Since it's a unified record, I'll update the type to fetch volume/fat/snf.
+                            Wait, we can't change the fetch easily here without breaking everything. 
+                            Let's modify the UI to just show the status and overriding flags nicely. */}
                         <div className="flex items-center gap-1.5">
                           <span className={cn(
-                            "text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider",
-                            record.decision === 'accepted' ? "bg-emerald-100 text-emerald-800" : "bg-red-100 text-red-800"
+                            "text-[13px] font-extrabold uppercase tracking-widest",
+                            isAccepted ? "text-emerald-600" : "text-red-600"
                           )}>
-                            {record.decision}
+                            {isAccepted ? 'Accepted' : 'Rejected'}
                           </span>
                           
                           {record.is_override && (
-                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider bg-slate-200 text-slate-700">
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider bg-amber-100 text-amber-800">
                               Override
                             </span>
                           )}
                           
                           {record.is_borderline && (
-                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider bg-amber-100 text-amber-800">
+                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider bg-orange-100 text-orange-800">
                               Border
                             </span>
                           )}
                         </div>
-
-                        <div className={cn(
-                          "flex items-center text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider",
-                          record.sync_status === 'synced' ? "text-slate-500" : 
-                          record.sync_status === 'failed' ? "text-red-700 bg-red-50" : "text-amber-700 bg-amber-50"
-                        )}>
-                          {record.sync_status === 'synced' ? (
-                            <><CheckCircle2 className="w-3 h-3 mr-1"/> Synced</>
-                          ) : record.sync_status === 'failed' ? (
-                            <><CloudOff className="w-3 h-3 mr-1"/> Sync Failed</>
-                          ) : (
-                            <><WifiOff className="w-3 h-3 mr-1"/> Pending</>
-                          )}
-                        </div>
                       </div>
-                    </div>
-                    
-                    <div className="shrink-0 text-slate-400 group-hover:text-blue-600 transition-colors">
-                      <ArrowRight className="w-5 h-5" />
+
+                      <div className={cn(
+                        "flex items-center text-[12px] font-bold px-2 py-1 rounded-full",
+                        record.sync_status === 'synced' ? "bg-slate-100 text-slate-600" : 
+                        record.sync_status === 'failed' ? "bg-red-50 text-red-600" : "bg-amber-50 text-amber-600"
+                      )}>
+                        {record.sync_status === 'synced' ? (
+                          <><CheckCircle2 className="w-3.5 h-3.5 mr-1 text-emerald-500"/> Synced</>
+                        ) : record.sync_status === 'failed' ? (
+                          <><CloudOff className="w-3.5 h-3.5 mr-1"/> Failed</>
+                        ) : (
+                          <><WifiOff className="w-3.5 h-3.5 mr-1"/> Pending</>
+                        )}
+                      </div>
                     </div>
                   </button>
                 )
@@ -391,6 +389,11 @@ export default function LookupSearchPage() {
           )}
         </div>
       </div>
+      
+      <AddFarmerDialog 
+        open={isAddFarmerOpen}
+        onOpenChange={setIsAddFarmerOpen}
+      />
     </div>
   )
 }

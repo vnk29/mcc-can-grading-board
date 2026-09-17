@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useRef, use } from 'react'
 import { useRouter } from 'next/navigation'
-import { QRCodeSVG } from 'qrcode.react'
+import { QRCodeCanvas } from 'qrcode.react'
 import * as htmlToImage from 'html-to-image'
 import { Loader2, ArrowLeft, Download, Share2, CheckCircle2, AlertTriangle, AlertCircle } from 'lucide-react'
 
@@ -420,17 +420,19 @@ export default function RejectionSlipPage({ params }: { params: Promise<{ refere
         </div>
 
         {/* QR Code */}
-        <div className="px-6 py-8 flex flex-col items-center justify-center bg-slate-50 text-center">
-          <QRCodeSVG 
-             value={lookupUrl}
-             size={120}
-             level="M"
-             includeMargin={false}
-          />
-          <p className="mt-4 text-xs font-bold text-slate-500 uppercase tracking-widest">
-            Scan to view this test record
-          </p>
-        </div>
+        {lookupUrl && (
+          <div className="px-6 py-8 flex flex-col items-center justify-center bg-slate-50 text-center">
+            <QRCodeCanvas 
+               value={lookupUrl}
+               size={120}
+               level="M"
+               includeMargin={false}
+            />
+            <p className="mt-4 text-xs font-bold text-slate-500 uppercase tracking-widest">
+              Scan to view this test record
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Actions (Excluded from Export) */}

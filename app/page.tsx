@@ -3,25 +3,26 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { v4 as uuidv4 } from 'uuid'
-import { CheckCircle2, AlertTriangle, XCircle, Search, Save, Check, LogOut, AlertCircle, Loader2, ClipboardList } from 'lucide-react'
+import { CheckCircle2, AlertTriangle, XCircle, Search, Check, AlertCircle, Loader2, ClipboardList, Plus } from 'lucide-react'
 
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
 import { enqueueEntry } from '@/lib/offlineQueue'
 import { evaluateCanTest, mapToDbInsert, REASON_LABELS, type CanTestAppEntry } from '@/lib/grading'
+import { safeErrorMessage } from '@/lib/errorMessages'
 import type { OperatorRow, FarmerRow, CanDecision, DbReasonCode } from '@/types/database'
 import type { CanTestEntry } from '@/types/index'
 
-import { Button, buttonVariants } from '@/components/ui/button'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog'
-import { Skeleton } from '@/components/ui/skeleton'
+import { AddFarmerDialog } from '@/components/AddFarmerDialog'
 import { cn } from '@/lib/utils'
 
 export default function IntakePage() {
@@ -37,7 +38,6 @@ export default function IntakePage() {
   // PIN Verification State
   const [operatorId, setOperatorId] = useState<string>('')
   const [activeOperator, setActiveOperator] = useState<Pick<OperatorRow, 'id' | 'name'> | null>(null)
-  const [showPinDialog, setShowPinDialog] = useState(false)
   const [pinInput, setPinInput] = useState('')
   const [pinError, setPinError] = useState('')
 
@@ -45,6 +45,7 @@ export default function IntakePage() {
   const [farmerId, setFarmerId] = useState<string>('')
   const [openFarmerSearch, setOpenFarmerSearch] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [isAddFarmerOpen, setIsAddFarmerOpen] = useState(false)
 
   const [canVolume, setCanVolume] = useState<string>('')
   const [fatPercent, setFatPercent] = useState<string>('')
@@ -98,6 +99,9 @@ export default function IntakePage() {
       if (savedOpId) {
         const op = operatorsData.find(o => o.id === savedOpId)
         if (op) setActiveOperator(op)
+        else setActiveOperator(null)
+      } else {
+        setActiveOperator(null)
       }
     } catch (err: unknown) {
       console.error(err)
@@ -113,13 +117,27 @@ export default function IntakePage() {
 
   useEffect(() => {
     loadData()
+
+    const handleSessionChange = () => {
+      const savedOpId = sessionStorage.getItem('active_operator_id')
+      if (!savedOpId) {
+        setActiveOperator(null)
+      }
+    }
+    
+    window.addEventListener('operator-session-changed', handleSessionChange)
+    return () => window.removeEventListener('operator-session-changed', handleSessionChange)
   }, [])
 
   const handleOperatorSelect = (id: string) => {
     setOperatorId(id)
     setPinInput('')
     setPinError('')
-    setShowPinDialog(true)
+  }
+
+  const handleFarmerAdded = (newFarmer: FarmerRow) => {
+    setFarmers(prev => [...prev, newFarmer].sort((a, b) => a.name.localeCompare(b.name)))
+    setFarmerId(newFarmer.id)
   }
 
   const verifyPin = () => {
@@ -128,17 +146,11 @@ export default function IntakePage() {
     if (op && pinInput.trim().length > 0) {
       setActiveOperator(op)
       sessionStorage.setItem('active_operator_id', op.id)
+      window.dispatchEvent(new CustomEvent('operator-session-changed'))
       // PIN is NO LONGER stored in sessionStorage
-      setShowPinDialog(false)
     } else {
       setPinError('PIN is required')
     }
-  }
-  
-  const handleLogout = () => {
-    setActiveOperator(null)
-    setOperatorId('')
-    sessionStorage.removeItem('active_operator_id')
   }
 
   // Live Grading
@@ -175,9 +187,6 @@ export default function IntakePage() {
       const now = new Date()
       const refCode = `MCC-${now.getFullYear()}${String(now.getMonth()+1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${Math.random().toString(36).substring(2,10).toUpperCase()}`
       setStableAudit({ refCode, testPerformedAt: now.toISOString() })
-    } else if (!hasValidReadings && stableAudit) {
-      // If they go back and change a raw reading or farmer, it's a new test conceptually
-      setStableAudit(null)
     }
   }, [hasValidReadings, stableAudit])
 
@@ -314,24 +323,18 @@ export default function IntakePage() {
          return
       }
       
-      // Real DB/RLS/validation error — show to operator, do NOT queue
-      let safeErrorMessage = 'An unknown database error occurred'
-      if (typeof err === 'object' && err !== null) {
-        const dbErr = err as { code?: string, message?: string, details?: string }
-        console.error(`[DB Error] Code: ${dbErr.code || 'None'}, Message: ${dbErr.message || 'None'}`)
-        if (dbErr.message) safeErrorMessage = dbErr.message
-      } else if (err instanceof Error) {
-        safeErrorMessage = err.message
-      }
-      
-      setSubmitError(`Database Error: ${safeErrorMessage}`)
+      // Real DB/RLS/validation error — show safe message, do NOT queue
+      setSubmitError(safeErrorMessage(err))
     } finally {
       setIsSubmitting(false)
       submitLock.current = false
     }
   }
 
-  const filteredFarmers = farmers.filter(f => f.name.toLowerCase().includes(searchQuery.toLowerCase()) || f.id.includes(searchQuery))
+  const filteredFarmers = useMemo(() => {
+    const q = searchQuery.toLowerCase()
+    return farmers.filter(f => f.name.toLowerCase().includes(q) || f.id.includes(searchQuery))
+  }, [farmers, searchQuery])
 
   if (isLoadingData) {
     return (
@@ -364,109 +367,119 @@ export default function IntakePage() {
 
   if (!activeOperator) {
     return (
-      <div className="min-h-screen bg-slate-50 p-4 md:p-6 flex items-center justify-center">
-         <Card className="w-full max-w-md">
-            <CardHeader>
-              <CardTitle className="text-2xl">Operator Login</CardTitle>
-              <CardDescription>Select your name to begin shift</CardDescription>
-            </CardHeader>
-            <CardContent>
-               <div className="space-y-2">
-                 <Select value={operatorId} onValueChange={(val) => val && handleOperatorSelect(val)}>
-                  <SelectTrigger className="h-14 text-lg bg-slate-50">
-                    <SelectValue placeholder="Select Operator" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {operators.map(op => (
-                      <SelectItem key={op.id} value={op.id} className="text-lg py-3">{op.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-               </div>
-            </CardContent>
-         </Card>
+      <div className="min-h-screen bg-slate-50 px-4 py-8 flex flex-col items-center justify-start">
+        <div className="flex flex-col p-6 sm:p-8 bg-white w-full max-w-md rounded-xl shadow-sm border border-slate-100 mt-4 sm:mt-12">
+          <p className="text-[11px] font-extrabold text-[#0f6041] tracking-wider uppercase mb-2">Operator Verification</p>
+          <h2 className="text-[32px] font-extrabold text-slate-900 mb-3">Start Shift</h2>
+          <p className="text-[15px] text-slate-600 mb-8 leading-relaxed">
+            Your shift records will be linked to your operator identity.
+          </p>
+          
+          <div className="space-y-6">
+            <div className="space-y-2">
+              <Label className="text-[14px] font-bold text-slate-900">Operator</Label>
+              <Select value={operatorId} onValueChange={(val) => val && handleOperatorSelect(val)}>
+                <SelectTrigger className="h-14 w-full text-[17px] font-semibold bg-slate-50 border-slate-200">
+                  <span className="flex-1 text-left truncate">
+                    {operatorId ? (operators.find(op => op.id === operatorId)?.name ?? 'Select Operator') : 'Select Operator'}
+                  </span>
+                </SelectTrigger>
+                <SelectContent>
+                  {operators.map(op => (
+                    <SelectItem key={op.id} value={op.id} className="text-[17px] py-3">{op.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-         <Dialog open={showPinDialog} onOpenChange={(open) => { setShowPinDialog(open); if(!open) setOperatorId(''); }}>
-            <DialogContent>
-               <DialogHeader>
-                 <DialogTitle>Enter PIN</DialogTitle>
-                 <DialogDescription>Verify your identity</DialogDescription>
-               </DialogHeader>
-               <div className="space-y-4 py-4">
-                 <Input 
-                   type="password"
-                   pattern="[0-9]*"
-                   inputMode="numeric"
-                   value={pinInput}
-                   onChange={e => setPinInput(e.target.value)}
-                   className="h-16 text-3xl text-center tracking-[1em]"
-                   autoFocus
-                   onKeyDown={(e) => { if (e.key === 'Enter') verifyPin(); }}
-                 />
-                 {pinError && <p className="text-red-500 font-medium text-center">{pinError}</p>}
-               </div>
-               <DialogFooter>
-                  <Button variant="outline" onClick={() => { setShowPinDialog(false); setOperatorId(''); }}>Cancel</Button>
-                  <Button onClick={verifyPin}>Login</Button>
-               </DialogFooter>
-            </DialogContent>
-         </Dialog>
+            <div className="space-y-2 relative">
+              <Label className="text-[14px] font-bold text-slate-900">Secure 4-digit PIN</Label>
+              <div className="relative flex justify-between gap-3 sm:gap-4">
+                <Input 
+                  type="password"
+                  pattern="[0-9]*"
+                  inputMode="numeric"
+                  maxLength={4}
+                  value={pinInput}
+                  onChange={e => setPinInput(e.target.value.replace(/\D/g, ''))}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-text z-10"
+                  onKeyDown={(e) => { if (e.key === 'Enter') verifyPin(); }}
+                />
+                {[0, 1, 2, 3].map(i => (
+                  <div key={i} className={cn(
+                    "flex-1 h-14 sm:h-16 rounded-xl border flex items-center justify-center text-2xl font-bold bg-white transition-colors",
+                    pinInput.length === i ? "border-[#0f6041] border-2" : pinInput.length > i ? "border-slate-800 text-slate-800" : "border-slate-200 text-slate-800"
+                  )}>
+                    {pinInput[i] ? '•' : ''}
+                  </div>
+                ))}
+              </div>
+              {pinError && <p className="text-red-500 font-medium text-[13px] mt-1">{pinError}</p>}
+            </div>
+
+            <Button 
+              onClick={verifyPin}
+              disabled={pinInput.length < 4}
+              className="w-full h-14 mt-6 bg-[#7e9e94] hover:bg-[#6c8a80] text-white font-bold text-[17px] rounded-xl flex items-center justify-center gap-2"
+            >
+              <CheckCircle2 className="w-5 h-5" />
+              Verify & Start Shift
+            </Button>
+
+            <p className="text-center text-[13px] text-slate-500 mt-4">
+              PIN is required once per shift, not for every can.
+            </p>
+          </div>
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 p-3 pb-36 sm:p-6 sm:pb-8">
-      <div className="mx-auto max-w-2xl space-y-4 sm:space-y-6">
+    <div className="w-full bg-slate-50 p-4 sm:p-6">
+      <div className="mx-auto max-w-lg space-y-5">
         
-        {/* Header / Active Operator */}
-        <div className="flex items-center justify-between bg-white p-4 rounded-xl shadow-sm border">
+        {/* Page Title */}
+        <div className="flex justify-between items-end mb-2 pt-2">
           <div>
-            <h1 className="text-xl font-bold tracking-tight text-slate-900">Milk Intake</h1>
-            <p className="text-sm text-slate-500 font-medium">Op: {activeOperator.name}</p>
+            <p className="text-[11px] font-extrabold text-[#0f6041] tracking-wider uppercase mb-1">New Intake</p>
+            <h2 className="text-[28px] font-extrabold text-[#052b1f] leading-none">Grade a Milk Can</h2>
           </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => router.push('/lookup')} className="text-slate-700">
-              <ClipboardList className="w-4 h-4 mr-1 sm:mr-2" /> 
-              <span className="hidden sm:inline">Records</span>
-            </Button>
-            <Button variant="ghost" size="sm" onClick={handleLogout} className="text-slate-500 px-2 sm:px-3">
-              <LogOut className="w-4 h-4 sm:mr-2" /> 
-              <span className="hidden sm:inline">Logout</span>
-            </Button>
+          <div className="text-right">
+            <p className="text-[14px] font-bold text-slate-900">Target</p>
+            <p className="text-[13px] text-slate-500">under 10 sec</p>
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
+        <form onSubmit={handleSubmit} className="space-y-4">
           
-          {/* Farmer Selection */}
-          <Card className="shadow-sm">
-            <CardHeader className="pb-3 px-4 sm:px-6 pt-4 sm:pt-6">
-              <CardTitle className="text-lg sm:text-xl">1. Select Farmer</CardTitle>
-            </CardHeader>
-            <CardContent className="px-4 sm:px-6 pb-4 sm:pb-6">
+          {/* 1. Farmer & Volume */}
+          <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+            <h3 className="text-[18px] font-bold text-slate-900 mb-1">1 &middot; Farmer &amp; Can</h3>
+            <p className="text-[14px] text-slate-500 mb-4">Who brought this can, and how much volume?</p>
+
+            <div className="space-y-4">
               <Popover open={openFarmerSearch} onOpenChange={setOpenFarmerSearch}>
-                <PopoverTrigger 
-                  className={cn(
-                    buttonVariants({ variant: "outline" }),
-                    "w-full justify-between h-14 text-lg font-normal bg-slate-50"
-                  )}
-                  aria-expanded={openFarmerSearch}
-                >
-                  {farmerId
-                    ? farmers.find((f) => f.id === farmerId)?.name
-                    : "Search farmer by name or ID..."}
-                  <Search className="ml-2 h-5 w-5 shrink-0 opacity-50" />
+                <PopoverTrigger>
+                  <button 
+                    type="button"
+                    className="w-full h-14 bg-slate-50 border border-slate-200 rounded-lg flex items-center px-4 text-left transition-colors hover:bg-slate-100"
+                  >
+                    <Search className="w-5 h-5 text-slate-400 mr-3 shrink-0" />
+                    <span className={cn("text-[17px] font-medium flex-1 truncate", farmerId ? "text-slate-900" : "text-slate-400")}>
+                      {farmerId ? farmers.find((f) => f.id === farmerId)?.name : "Search farmer name or ID"}
+                    </span>
+                  </button>
                 </PopoverTrigger>
-                <PopoverContent className="w-[calc(100vw-24px)] sm:w-full p-0 max-w-2xl" align="center">
+                <PopoverContent className="w-[calc(100vw-32px)] sm:w-[460px] p-0" align="center">
                   <Command shouldFilter={false}>
                     <CommandInput 
                        placeholder="Type name or ID..." 
                        value={searchQuery}
                        onValueChange={setSearchQuery}
-                       className="h-14 text-lg" 
+                       className="h-14 text-[16px]" 
                     />
-                    <CommandEmpty className="p-4 text-center">No farmer found.</CommandEmpty>
+                    <CommandEmpty className="p-4 text-center text-slate-500">No farmer found.</CommandEmpty>
                     <CommandGroup className="max-h-[250px] overflow-auto">
                       <CommandList>
                          {filteredFarmers.map((farmer) => (
@@ -478,16 +491,10 @@ export default function IntakePage() {
                                setOpenFarmerSearch(false)
                                setSearchQuery('')
                              }}
-                             className="text-lg py-3 sm:py-4 border-b last:border-0"
+                             className="text-[16px] py-3 border-b border-slate-100 last:border-0"
                            >
-                             <Check
-                               className={cn(
-                                 "mr-3 h-5 w-5",
-                                 farmerId === farmer.id ? "opacity-100 text-emerald-600" : "opacity-0"
-                               )}
-                             />
-                             <span className="font-medium">{farmer.name}</span>
-                             <span className="ml-auto text-slate-400 text-sm">#{farmer.id.substring(0,6)}</span>
+                             <span className="font-medium flex-1">{farmer.name}</span>
+                             <span className="text-slate-400 text-sm">#{farmer.id.substring(0,6)}</span>
                            </CommandItem>
                          ))}
                       </CommandList>
@@ -495,245 +502,226 @@ export default function IntakePage() {
                   </Command>
                 </PopoverContent>
               </Popover>
-            </CardContent>
-          </Card>
 
-          {/* Quality Measurements */}
-          <Card className="shadow-sm">
-            <CardHeader className="pb-3 px-4 sm:px-6 pt-4 sm:pt-6">
-              <CardTitle className="text-lg sm:text-xl">2. Quality Measurements</CardTitle>
-            </CardHeader>
-            <CardContent className="px-4 sm:px-6 pb-4 sm:pb-6 space-y-4 sm:space-y-6">
-              
-              <div className="grid grid-cols-2 gap-3 sm:gap-6">
-                <div className="space-y-1.5">
-                  <Label htmlFor="volume" className="text-sm sm:text-base font-semibold text-slate-700">Volume (L)</Label>
+              <div className="space-y-1.5 relative">
+                <Label className="text-[13px] font-bold text-slate-900">Volume (L)</Label>
+                <div className="relative">
                   <Input 
-                    id="volume"
                     type="number" 
                     step="0.1" 
                     min="0"
                     placeholder="0.0" 
-                    className="h-14 sm:h-16 text-xl sm:text-2xl text-center bg-slate-50 font-medium"
+                    className="h-14 bg-slate-50 border-slate-200 text-[20px] font-bold text-center pr-8 text-slate-700"
                     value={canVolume}
                     onChange={(e) => setCanVolume(e.target.value)}
                   />
+                  <span className="absolute right-4 top-[14px] text-[16px] font-bold text-slate-800">L</span>
                 </div>
-                
-                <div className="space-y-1.5">
-                  <Label htmlFor="temp" className="text-sm sm:text-base font-semibold text-slate-700">Temp (°C)</Label>
-                  <Input 
-                    id="temp"
-                    type="number" 
-                    step="0.1" 
-                    min="0"
-                    max="50"
-                    placeholder="0.0" 
-                    className="h-14 sm:h-16 text-xl sm:text-2xl text-center bg-slate-50 font-medium"
-                    value={temperatureC}
-                    onChange={(e) => setTemperatureC(e.target.value)}
-                  />
-                </div>
-                
-                <div className="space-y-1.5">
-                  <Label htmlFor="fat" className="text-sm sm:text-base font-semibold text-slate-700">Fat %</Label>
+              </div>
+            </div>
+
+            <button 
+              type="button" 
+              className="mt-4 flex items-center text-[#0f6041] font-bold text-[15px] hover:underline" 
+              onClick={() => setIsAddFarmerOpen(true)}
+            >
+              <Plus className="w-4 h-4 mr-1.5" strokeWidth={3} />
+              Add Farmer
+            </button>
+          </div>
+
+          {/* 2. Quality Tests */}
+          <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm">
+            <h3 className="text-[18px] font-bold text-slate-900 mb-1">2 &middot; Quality Tests</h3>
+            <p className="text-[14px] text-slate-500 mb-4">Enter meter readings</p>
+
+            <div className="flex gap-4 mb-5">
+              <div className="flex-1 space-y-1.5 relative">
+                <Label className="text-[13px] font-bold text-slate-900">Fat</Label>
+                <div className="relative">
                   <Input
-                    id="fat"
                     type="number"
                     step="0.01"
                     min="0"
                     max="15"
                     placeholder="0.0"
-                    className="h-14 sm:h-16 text-xl sm:text-2xl text-center bg-slate-50 font-medium"
+                    className="h-14 bg-slate-50 border-slate-200 text-[20px] font-bold text-center pr-8 text-slate-700"
                     value={fatPercent}
                     onChange={(e) => setFatPercent(e.target.value)}
                   />
+                  <span className="absolute right-4 top-[14px] text-[16px] font-bold text-slate-800">%</span>
                 </div>
-                
-                <div className="space-y-1.5">
-                  <Label htmlFor="snf" className="text-sm sm:text-base font-semibold text-slate-700">SNF %</Label>
+              </div>
+              <div className="flex-1 space-y-1.5 relative">
+                <Label className="text-[13px] font-bold text-slate-900">SNF</Label>
+                <div className="relative">
                   <Input
-                    id="snf"
                     type="number"
                     step="0.01"
                     min="0"
                     max="15"
                     placeholder="0.0"
-                    className="h-14 sm:h-16 text-xl sm:text-2xl text-center bg-slate-50 font-medium"
+                    className="h-14 bg-slate-50 border-slate-200 text-[20px] font-bold text-center pr-8 text-slate-700"
                     value={snfPercent}
                     onChange={(e) => setSnfPercent(e.target.value)}
                   />
-                </div>
-              </div>
-
-              {/* Adulteration Buttons (Tri-state) */}
-              <div className="pt-4 sm:pt-6 mt-2 border-t">
-                <Label className="text-sm sm:text-base font-semibold text-slate-700 mb-3 block">Adulteration Strip Test</Label>
-                <div className="grid grid-cols-2 gap-3">
-                  <Button 
-                    type="button" 
-                    variant={adulterationResult === 'pass' ? 'default' : 'outline'}
-                    className={cn(
-                      "h-14 sm:h-16 text-lg font-bold transition-all",
-                      adulterationResult === 'pass' && "bg-emerald-600 hover:bg-emerald-700"
-                    )}
-                    onClick={() => setAdulterationResult('pass')}
-                  >
-                    PASS
-                  </Button>
-                  <Button 
-                    type="button"
-                    variant={adulterationResult === 'fail' ? 'default' : 'outline'}
-                    className={cn(
-                      "h-14 sm:h-16 text-lg font-bold transition-all",
-                      adulterationResult === 'fail' && "bg-red-600 hover:bg-red-700"
-                    )}
-                    onClick={() => setAdulterationResult('fail')}
-                  >
-                    FAIL
-                  </Button>
-                </div>
-              </div>
-
-            </CardContent>
-          </Card>
-
-          {/* INVALID STATE (TEST INCOMPLETE) */}
-          {evaluation.hasInvalidReadings ? (
-            <div className="p-4 sm:p-6 rounded-xl border-2 bg-slate-100 border-slate-300">
-              <div className="flex items-start gap-3">
-                <AlertCircle className="w-6 h-6 sm:w-8 sm:h-8 text-slate-500 shrink-0" />
-                <div>
-                  <h3 className="text-lg sm:text-xl font-bold mb-2 text-slate-700">TEST INCOMPLETE</h3>
-                  <ul className="space-y-1.5">
-                    {evaluation.reasonCodes.filter(c => c.startsWith('INVALID_')).map(code => (
-                      <li key={code} className="text-sm sm:text-base font-medium text-slate-600 flex items-center">
-                        <span className="w-1.5 h-1.5 rounded-full bg-slate-400 mr-2 shrink-0"></span>
-                        {REASON_LABELS[code] || code}
-                      </li>
-                    ))}
-                  </ul>
+                  <span className="absolute right-4 top-[14px] text-[16px] font-bold text-slate-800">%</span>
                 </div>
               </div>
             </div>
-          ) : (
-            /* VALID GRADING STATE */
-            <div className={cn(
-              "p-4 sm:p-6 rounded-xl border-2 transition-colors",
-              !isOverride && !evaluation.isBorderline && finalDecision === 'accepted' && "bg-emerald-50 border-emerald-200 text-emerald-900",
-              !isOverride && !evaluation.isBorderline && finalDecision === 'rejected' && "bg-red-50 border-red-200 text-red-900",
-              !isOverride && evaluation.isBorderline && "bg-amber-50 border-amber-300 text-amber-900",
-              isOverride && finalDecision === 'accepted' && "bg-emerald-50 border-emerald-400 text-emerald-900 shadow-[inset_0_0_0_2px_rgba(52,211,153,0.3)]",
-              isOverride && finalDecision === 'rejected' && "bg-red-50 border-red-400 text-red-900 shadow-[inset_0_0_0_2px_rgba(248,113,113,0.3)]"
-            )}>
-              <div className="flex items-start gap-3 sm:gap-4">
-                {!isOverride && !evaluation.isBorderline && finalDecision === 'accepted' && <CheckCircle2 className="w-7 h-7 sm:w-8 sm:h-8 text-emerald-600 shrink-0" />}
-                {!isOverride && !evaluation.isBorderline && finalDecision === 'rejected' && <XCircle className="w-7 h-7 sm:w-8 sm:h-8 text-red-600 shrink-0" />}
-                {!isOverride && evaluation.isBorderline && <AlertTriangle className="w-7 h-7 sm:w-8 sm:h-8 text-amber-600 shrink-0" />}
-                {isOverride && <AlertTriangle className="w-7 h-7 sm:w-8 sm:h-8 shrink-0 opacity-80" />}
-                
-                <div>
-                  <h3 className="text-xl sm:text-2xl font-bold mb-1 leading-tight uppercase">
-                    {isOverride 
-                      ? `${finalDecision} — OVERRIDE`
-                      : evaluation.isBorderline 
-                        ? 'Borderline — Review'
-                        : finalDecision
-                    }
-                  </h3>
-                  
-                  {/* System Suggestion (Always show for borderline or override) */}
-                  {(isOverride || (!isOverride && evaluation.isBorderline)) && (
-                     <p className="text-sm font-bold opacity-80 mb-3">
-                        Suggested decision: {evaluation.decision.toUpperCase()}
-                     </p>
-                  )}
-                  
-                  {/* Show actual reasons */}
-                  {evaluation.reasonCodes.length > 0 && (
-                    <div className="mt-2 space-y-1">
-                      {evaluation.reasonCodes.filter(c => !c.startsWith('INVALID_')).map(code => (
-                        <p key={code} className="text-sm font-medium opacity-90 flex items-center">
-                           <span className="w-1.5 h-1.5 rounded-full bg-current opacity-50 mr-2 shrink-0"></span>
-                           {REASON_LABELS[code] || code}
-                        </p>
-                      ))}
-                    </div>
-                  )}
 
-                  {/* Show borderline flags */}
-                  {!isOverride && evaluation.isBorderline && (
-                    <div className="mt-3 space-y-1">
-                      {evaluation.borderlineFlags.map(code => (
-                        <p key={code} className="text-sm font-semibold flex items-center text-amber-800 bg-amber-200/50 px-2 py-1 rounded">
-                           <AlertTriangle className="w-4 h-4 mr-2" />
-                           {REASON_LABELS[code] || code} is near limit
-                        </p>
-                      ))}
-                    </div>
-                  )}
-                </div>
+            <div className="space-y-1.5 relative mb-5">
+              <Label className="text-[13px] font-bold text-slate-900">Temperature</Label>
+              <div className="relative">
+                <Input 
+                  type="number" 
+                  step="0.1" 
+                  min="0"
+                  max="50"
+                  placeholder="0.0" 
+                  className="h-14 bg-slate-50 border-slate-200 text-[20px] font-bold text-center pr-8 text-slate-700"
+                  value={temperatureC}
+                  onChange={(e) => setTemperatureC(e.target.value)}
+                />
+                <span className="absolute right-4 top-[14px] text-[16px] font-bold text-slate-800">&deg;C</span>
               </div>
+            </div>
 
-              {/* Operator Override Toggle */}
-              <div className="mt-5 pt-5 border-t border-black/10">
-                 <div className="flex items-center justify-between sm:justify-start gap-4 mb-3">
-                    <Label htmlFor="override" className="text-sm sm:text-base font-bold cursor-pointer">
-                      Override System Decision?
-                    </Label>
-                    <Switch
-                      id="override"
-                      checked={isOverride}
-                      onCheckedChange={(v) => { setIsOverride(v); if(!v) setOverrideReason(''); }}
-                    />
+            <div className="space-y-2 mt-4 pt-4 border-t border-slate-100">
+              <Label className="text-[14px] font-bold text-slate-900 block mb-2">Adulteration strip</Label>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  className={cn(
+                    "flex-1 h-14 rounded-xl border flex items-center justify-center text-[16px] font-bold transition-colors gap-2",
+                    adulterationResult === 'pass' 
+                      ? "bg-white border-slate-800 text-slate-900 shadow-sm" 
+                      : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50"
+                  )}
+                  onClick={() => setAdulterationResult('pass')}
+                >
+                  {adulterationResult === 'pass' && <Check className="w-5 h-5" />}
+                  PASS
+                </button>
+                <button
+                  type="button"
+                  className={cn(
+                    "flex-1 h-14 rounded-xl border flex items-center justify-center text-[16px] font-bold transition-colors gap-2",
+                    adulterationResult === 'fail' 
+                      ? "bg-white border-slate-800 text-slate-900 shadow-sm" 
+                      : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50"
+                  )}
+                  onClick={() => setAdulterationResult('fail')}
+                >
+                  {adulterationResult === 'fail' && <XCircle className="w-5 h-5" />}
+                  FAIL
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Override Toggle (Preserving functionality) */}
+          {hasValidReadings && (
+            <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm space-y-3">
+               <div className="flex items-center justify-between">
+                  <Label htmlFor="override" className="text-[15px] font-bold cursor-pointer text-slate-800">
+                    Override System Decision?
+                  </Label>
+                  <Switch
+                    id="override"
+                    checked={isOverride}
+                    onCheckedChange={(v) => { setIsOverride(v); if(!v) setOverrideReason(''); }}
+                  />
+               </div>
+               {isOverride && (
+                 <div className="space-y-2 animate-in fade-in slide-in-from-top-2">
+                   <Textarea 
+                     value={overrideReason}
+                     onChange={e => setOverrideReason(e.target.value)}
+                     placeholder="Explain why you are overriding..."
+                     className="bg-slate-50 text-[15px]"
+                     rows={2}
+                     maxLength={500}
+                   />
                  </div>
-                 {isOverride && (
-                   <div className="space-y-2 mt-4 animate-in fade-in slide-in-from-top-2">
-                     <Label className="font-semibold">Reason for Override (Required)</Label>
-                     <Textarea 
-                       value={overrideReason}
-                       onChange={e => setOverrideReason(e.target.value)}
-                       placeholder="Explain why you are overriding..."
-                       className="bg-white/60 text-base"
-                       rows={3}
-                     />
-                   </div>
-                 )}
-              </div>
+               )}
             </div>
           )}
 
+          {/* Live Grading Box */}
+          <div className={cn(
+            "rounded-xl p-4 flex items-start gap-3 mt-4 border",
+            !hasValidReadings
+              ? "bg-[#eaf4ef] border-[#d1e9de] text-[#0f6041]"
+              : isOverride
+                ? "bg-amber-50 border-amber-200 text-amber-800"
+                : finalDecision === 'accepted'
+                  ? "bg-[#eaf4ef] border-[#b0ebd1] text-[#0f6041]"
+                  : "bg-red-50 border-red-200 text-red-700"
+          )}>
+            {!hasValidReadings ? (
+              <AlertTriangle className="w-6 h-6 shrink-0 mt-0.5" />
+            ) : isOverride ? (
+              <AlertTriangle className="w-6 h-6 shrink-0 mt-0.5" />
+            ) : finalDecision === 'accepted' ? (
+              <CheckCircle2 className="w-6 h-6 shrink-0 mt-0.5" />
+            ) : (
+              <XCircle className="w-6 h-6 shrink-0 mt-0.5" />
+            )}
+            
+            <div className="flex-1">
+              <p className="text-[16px] font-bold">
+                {!hasValidReadings 
+                  ? "Waiting for readings" 
+                  : isOverride 
+                    ? `OVERRIDDEN: ${finalDecision.toUpperCase()}`
+                    : finalDecision === 'accepted' ? "Milk Accepted" : "Milk Rejected"}
+              </p>
+              <p className="text-[14px] opacity-80 leading-snug mt-1 font-medium">
+                {!hasValidReadings
+                  ? "Complete all fields to see the live grade."
+                  : evaluation.reasonCodes.length > 0 
+                    ? evaluation.reasonCodes.filter(c => !c.startsWith('INVALID_')).map(code => REASON_LABELS[code] || code).join(', ')
+                    : "All tests passed successfully."}
+              </p>
+            </div>
+          </div>
+
           {submitError && (
-            <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm font-medium flex items-start gap-2">
+            <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm font-medium flex items-start gap-2">
               <AlertCircle className="w-5 h-5 shrink-0" />
               <span>{submitError}</span>
             </div>
           )}
 
-          {/* Sticky bottom submit on mobile */}
-          <div className="fixed sm:static bottom-0 left-0 right-0 p-3 sm:p-0 bg-white sm:bg-transparent border-t sm:border-0 z-10 sm:mt-6">
-            <Button 
-              type="submit" 
-              disabled={!isValidSubmit || isSubmitting}
-              className={cn(
-                 "w-full h-14 sm:h-16 text-lg sm:text-xl font-bold shadow-lg sm:shadow-none transition-all",
-                 isValidSubmit ? (finalDecision === 'accepted' ? "bg-emerald-600 hover:bg-emerald-700" : "bg-red-600 hover:bg-red-700") : ""
-              )}
-              size="lg"
-            >
-              {isSubmitting ? (
-                <><Loader2 className="w-6 h-6 mr-2 animate-spin" /> Processing...</>
-              ) : (
-                <>
-                  <Save className="w-5 h-5 sm:w-6 sm:h-6 mr-2" />
-                  {!isValidSubmit ? 'Check Readings to Submit' : isOverride ? `FORCE ${finalDecision.toUpperCase()}` : finalDecision === 'accepted' ? 'Accept Milk' : 'Reject Milk'}
-                </>
-              )}
-            </Button>
-          </div>
-
+          {/* Submit Button */}
+          <Button 
+            type="submit" 
+            disabled={!isValidSubmit || isSubmitting}
+            className={cn(
+              "w-full h-14 text-[17px] font-bold rounded-xl mt-2",
+              isValidSubmit ? "bg-[#7e9e94] hover:bg-[#6c8a80] text-white" : "bg-[#7e9e94]/60 text-white cursor-not-allowed"
+            )}
+          >
+            {isSubmitting ? (
+              <><Loader2 className="w-5 h-5 mr-2 animate-spin" /> Processing...</>
+            ) : !isValidSubmit ? (
+              <><ClipboardList className="w-5 h-5 mr-2" /> Complete Readings to Record</>
+            ) : (
+              <><CheckCircle2 className="w-5 h-5 mr-2" /> Save Record</>
+            )}
+          </Button>
+          <p className="text-center text-[12px] text-slate-500 font-medium pb-2">
+            Will sync immediately &middot; Time and operator captured
+          </p>
         </form>
       </div>
+
+      <AddFarmerDialog 
+        open={isAddFarmerOpen}
+        onOpenChange={setIsAddFarmerOpen}
+        onSuccess={handleFarmerAdded}
+      />
     </div>
   )
 }
