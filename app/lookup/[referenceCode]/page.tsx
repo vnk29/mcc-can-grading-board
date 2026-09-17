@@ -255,7 +255,7 @@ export default function RecordDetailPage({
         p_operator_id: activeOperatorId,
         p_pin: activePin,
         p_can_test_id: record.id,
-        p_old_values: oldValues,
+
         p_new_values: newValues,
         p_reason: correctionReason.trim()
       })

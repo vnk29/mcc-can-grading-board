@@ -273,7 +273,7 @@ export type Database = {
           p_operator_id: string
           p_pin: string
           p_can_test_id: string
-          p_old_values: Record<string, unknown>
+
           p_new_values: Record<string, unknown>
           p_reason: string
         }
