@@ -63,7 +63,13 @@ export function AppHeader({ onLogout }: AppHeaderProps) {
                     : "Online"}
             </span>
             <span className="inline sm:hidden">
-              {!isOnline ? "Offline" : "Online"}
+              {!isOnline 
+                ? "Offline" 
+                : failedCount > 0 
+                  ? `${failedCount} Failed` 
+                  : pendingCount > 0 || isSyncing
+                    ? "Syncing"
+                    : "Online"}
             </span>
           </div>
 

@@ -18,7 +18,7 @@ interface DbErrorLike {
  */
 export function safeErrorMessage(err: unknown): string {
   if (err instanceof TypeError) {
-    return 'Connection problem. The record has been saved offline.'
+    return 'Connection problem. Please try again.'
   }
 
   if (typeof err === 'object' && err !== null) {
@@ -32,7 +32,7 @@ export function safeErrorMessage(err: unknown): string {
     )
 
     if (!code || code === '') {
-      return 'Connection problem. The record has been saved offline.'
+      return 'Connection problem. Please try again.'
     }
 
     if (code === '42501' || code === '403') {

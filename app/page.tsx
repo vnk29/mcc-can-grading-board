@@ -460,16 +460,13 @@ export default function IntakePage() {
 
             <div className="space-y-4">
               <Popover open={openFarmerSearch} onOpenChange={setOpenFarmerSearch}>
-                <PopoverTrigger>
-                  <button 
-                    type="button"
-                    className="w-full h-14 bg-slate-50 border border-slate-200 rounded-lg flex items-center px-4 text-left transition-colors hover:bg-slate-100"
-                  >
-                    <Search className="w-5 h-5 text-slate-400 mr-3 shrink-0" />
-                    <span className={cn("text-[17px] font-medium flex-1 truncate", farmerId ? "text-slate-900" : "text-slate-400")}>
-                      {farmerId ? farmers.find((f) => f.id === farmerId)?.name : "Search farmer name or ID"}
-                    </span>
-                  </button>
+                <PopoverTrigger
+                  className="w-full h-14 bg-slate-50 border border-slate-200 rounded-lg flex items-center px-4 text-left transition-colors hover:bg-slate-100"
+                >
+                  <Search className="w-5 h-5 text-slate-400 mr-3 shrink-0" />
+                  <span className={cn("text-[17px] font-medium flex-1 truncate", farmerId ? "text-slate-900" : "text-slate-400")}>
+                    {farmerId ? farmers.find((f) => f.id === farmerId)?.name : "Search farmer name or ID"}
+                  </span>
                 </PopoverTrigger>
                 <PopoverContent className="w-[calc(100vw-32px)] sm:w-[460px] p-0" align="center">
                   <Command shouldFilter={false}>

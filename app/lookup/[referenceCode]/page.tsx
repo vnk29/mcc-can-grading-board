@@ -374,9 +374,12 @@ export default function RecordDetailPage({
                 : record.decision === 'accepted' ? "Milk Accepted" : "Milk Rejected"}
             </p>
             <p className="text-[14px] opacity-80 leading-snug mt-1 font-medium">
-              {record.reason_codes && record.reason_codes.length > 0 
-                ? record.reason_codes.filter(c => !c.startsWith('INVALID_')).map(code => REASON_LABELS[code as DbReasonCode] || code).join(', ')
-                : "All tests passed successfully."}
+              {(() => {
+                const validCodes = record.reason_codes ? record.reason_codes.filter(c => !c.startsWith('INVALID_')) : [];
+                return validCodes.length > 0
+                  ? validCodes.map(code => REASON_LABELS[code as DbReasonCode] || code).join(', ')
+                  : "All tests passed successfully.";
+              })()}
             </p>
             {record.is_override && (
                <p className="mt-2 text-[14px] italic opacity-80 border-t border-amber-200/50 pt-2">“{record.override_reason}”</p>

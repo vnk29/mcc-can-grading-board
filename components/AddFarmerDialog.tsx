@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import type { FarmerRow } from '@/types/database'
 import {
@@ -29,6 +29,13 @@ export function AddFarmerDialog({ open, onOpenChange, onSuccess }: AddFarmerDial
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current)
+    }
+  }, [])
 
   const resetForm = () => {
     setName('')
@@ -127,11 +134,13 @@ export function AddFarmerDialog({ open, onOpenChange, onSuccess }: AddFarmerDial
       setSuccess(true)
       
       // Notify parent after a short delay so they can see the success state
-      setTimeout(() => {
+      timeoutRef.current = setTimeout(() => {
+        setIsSubmitting(false)
         if (onSuccess && data) {
           onSuccess(data as FarmerRow)
         }
-        handleOpenChange(false)
+        onOpenChange(false)
+        resetForm()
       }, 1000)
 
     } catch (err) {
