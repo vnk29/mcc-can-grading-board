@@ -152,15 +152,9 @@ export function toAppEntry(entry: CanTestEntry): CanTestAppEntry {
     referenceCode: entry.referenceCode,
     photoUrl: entry.photoUrl ?? null,
     evidenceType: entry.evidenceType ?? (
-      entry.finalDecision === 'rejected' 
-        ? (entry.photoUrl ? 'photo' : 'sensory') 
-        : null
+      entry.photoUrl ? 'photo' : null
     ),
-    sensoryNote: entry.sensoryNote ?? (
-      entry.finalDecision === 'rejected' && !entry.evidenceType && !entry.photoUrl 
-        ? 'Legacy rejection: No evidence provided' 
-        : null
-    ),
+    sensoryNote: entry.sensoryNote ?? null,
     testPerformedAt: entry.testPerformedAt,
   }
 }
@@ -193,14 +187,17 @@ export function isNetworkError(err: unknown): boolean {
  *   - Network error → stop (retry on next online event)
  *   - DB/RLS/validation error → mark failed, continue to next entry
  *
- * This function is safe to call multiple times — it reads fresh state from
- * IndexedDB each time.
+ * onProgress(processed) is called after each record is handled so the UI
+ * can show "Syncing X of Y" without blocking.
  */
-export async function syncPendingEntries(): Promise<SyncResult> {
+export async function syncPendingEntries(
+  onProgress?: (processed: number) => void
+): Promise<SyncResult> {
   const entries = await getPendingEntries()
   let synced = 0
   let failed = 0
   let stoppedByNetwork = false
+  let processed = 0
 
   for (const entry of entries) {
     // Skip entries already marked as failed (unless user resets them)
@@ -244,6 +241,12 @@ export async function syncPendingEntries(): Promise<SyncResult> {
       await markEntryFailed(entry.id)
       failed++
     }
+
+    processed++
+    onProgress?.(processed)
+
+    // Yield to the event loop between records to keep UI responsive
+    await new Promise<void>(resolve => setTimeout(resolve, 0))
   }
 
   // Count remaining
@@ -256,12 +259,15 @@ export async function syncPendingEntries(): Promise<SyncResult> {
 /**
  * Reset all failed entries back to pending and retry sync.
  */
-export async function retryFailedEntries(): Promise<SyncResult> {
+export async function retryFailedEntries(
+  onProgress?: (processed: number) => void
+): Promise<SyncResult> {
   const entries = await getPendingEntries()
   for (const entry of entries) {
     if (entry.syncStatus === 'failed') {
       await markEntryPending(entry.id)
     }
   }
-  return syncPendingEntries()
+  return syncPendingEntries(onProgress)
 }
+

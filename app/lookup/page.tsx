@@ -196,16 +196,16 @@ export default function LookupSearchPage() {
   const pendingCans = results.filter(r => r.sync_status === 'pending' || r.sync_status === 'failed').length
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-24">
+    <div className="min-h-screen bg-background pb-24">
       {/* Top Header */}
-      <div className="bg-white border-b border-slate-200 sticky top-16 z-10 shadow-sm">
+      <div className="bg-card border-b-2 border-border sticky top-0 z-10 shadow-sm">
         <div className="max-w-xl mx-auto px-4 py-4 flex items-center justify-between">
           <div>
-            <h1 className="text-[22px] font-extrabold text-[#052b1f] tracking-tight">Daily Ledger</h1>
-            <p className="text-[13px] text-slate-500 font-medium">Today&apos;s Intake</p>
+            <h1 className="text-[24px] font-black text-foreground tracking-tight">Daily Ledger</h1>
+            <p className="text-[14px] text-muted-foreground font-bold uppercase tracking-wider">Today&apos;s Intake</p>
           </div>
           <Button 
-            className="bg-[#0f6041] hover:bg-[#0a422c] text-white font-bold h-9 px-4 rounded-md shadow-sm"
+            className="bg-primary hover:bg-primary/90 text-primary-foreground font-extrabold h-12 px-5 rounded-xl shadow-sm transition-all active:scale-95"
             onClick={() => setIsAddFarmerOpen(true)}
           >
             + Add Farmer
@@ -213,60 +213,60 @@ export default function LookupSearchPage() {
         </div>
       </div>
 
-      <div className="max-w-xl mx-auto p-4 space-y-4">
+      <div className="max-w-xl mx-auto p-4 space-y-6">
         {/* Search Form */}
-        <Card className="shadow-sm border-slate-200">
-          <CardContent className="p-4">
-            <form onSubmit={handleSearch} className="space-y-3">
+        <Card className="shadow-sm border-2 border-input rounded-2xl overflow-hidden bg-card">
+          <CardContent className="p-5">
+            <form onSubmit={handleSearch} className="space-y-4">
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-6 w-6 text-muted-foreground" />
                 <Input 
                   id="search"
                   placeholder="Search by ID or Farmer name..." 
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 h-12 text-base bg-slate-50 border-slate-200 rounded-lg focus-visible:ring-[#0f6041]"
+                  className="pl-12 h-14 text-[16px] font-semibold bg-background border-2 border-input rounded-xl focus-visible:ring-primary focus-visible:ring-2"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-4">
                 <div className="relative">
-                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
                   <Input 
                     type="date"
                     value={startDate}
                     onChange={(e) => setStartDate(e.target.value)}
-                    className="pl-9 h-11 bg-slate-50 text-sm border-slate-200 rounded-lg focus-visible:ring-[#0f6041]"
+                    className="pl-10 h-14 bg-background text-[15px] font-bold border-2 border-input rounded-xl focus-visible:ring-primary focus-visible:ring-2"
                   />
                 </div>
                 <div className="relative">
-                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
                   <Input 
                     type="date"
                     value={endDate}
                     onChange={(e) => setEndDate(e.target.value)}
-                    className="pl-9 h-11 bg-slate-50 text-sm border-slate-200 rounded-lg focus-visible:ring-[#0f6041]"
+                    className="pl-10 h-14 bg-background text-[15px] font-bold border-2 border-input rounded-xl focus-visible:ring-primary focus-visible:ring-2"
                   />
                 </div>
               </div>
 
-              <div className="flex gap-2">
+              <div className="flex gap-3 pt-2">
                 <Button 
                   type="button" 
                   variant="outline" 
                   onClick={clearFilters}
                   aria-label="Clear filters"
-                  className="h-11 px-4 shrink-0 border-slate-200 text-slate-600"
+                  className="h-14 px-5 shrink-0 border-2 border-input text-muted-foreground rounded-xl font-bold hover:bg-muted"
                   disabled={!searchQuery && !startDate && !endDate}
                 >
-                  <FilterX className="h-4 w-4" />
+                  <FilterX className="h-6 w-6" />
                 </Button>
                 <Button 
                   type="submit" 
-                  className="h-11 flex-1 font-bold bg-[#0f6041] hover:bg-[#0a422c] text-white"
+                  className="h-14 flex-1 text-[17px] font-extrabold bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl transition-all active:scale-[0.98]"
                   disabled={isSearching}
                 >
-                  {isSearching ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Search className="h-4 w-4 mr-2" />}
+                  {isSearching ? <Loader2 className="h-5 w-5 animate-spin mr-2" /> : <Search className="h-5 w-5 mr-2" />}
                   Search
                 </Button>
               </div>
@@ -297,22 +297,22 @@ export default function LookupSearchPage() {
 
           {/* Today Summary */}
           {!isSearching && !error && results.length > 0 && (
-            <div className="grid grid-cols-4 gap-2 mb-2">
-              <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm flex flex-col items-center justify-center text-center">
-                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">Total</span>
-                <span className="text-xl font-black text-slate-900">{totalCans}</span>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+              <div className="bg-card p-3 rounded-2xl border-2 border-input shadow-sm flex flex-col items-center justify-center text-center">
+                <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Total</span>
+                <span className="text-2xl font-black text-foreground">{totalCans}</span>
               </div>
-              <div className="bg-[#eaf4ef] p-3 rounded-xl border border-[#b0ebd1] shadow-sm flex flex-col items-center justify-center text-center">
-                <span className="text-[10px] font-bold text-[#0f6041] uppercase tracking-wider mb-0.5">Accepted</span>
-                <span className="text-xl font-black text-[#052b1f]">{acceptedCans}</span>
+              <div className="bg-emerald-50 p-3 rounded-2xl border-2 border-emerald-200 shadow-sm flex flex-col items-center justify-center text-center">
+                <span className="text-[11px] font-bold text-emerald-700 uppercase tracking-widest mb-1">Accepted</span>
+                <span className="text-2xl font-black text-emerald-900">{acceptedCans}</span>
               </div>
-              <div className="bg-red-50 p-3 rounded-xl border border-red-100 shadow-sm flex flex-col items-center justify-center text-center">
-                <span className="text-[10px] font-bold text-red-700 uppercase tracking-wider mb-0.5">Rejected</span>
-                <span className="text-xl font-black text-red-900">{rejectedCans}</span>
+              <div className="bg-rose-50 p-3 rounded-2xl border-2 border-rose-200 shadow-sm flex flex-col items-center justify-center text-center">
+                <span className="text-[11px] font-bold text-rose-700 uppercase tracking-widest mb-1">Rejected</span>
+                <span className="text-2xl font-black text-rose-900">{rejectedCans}</span>
               </div>
-              <div className="bg-amber-50 p-3 rounded-xl border border-amber-100 shadow-sm flex flex-col items-center justify-center text-center">
-                <span className="text-[10px] font-bold text-amber-700 uppercase tracking-wider mb-0.5">Pending</span>
-                <span className="text-xl font-black text-amber-900">{pendingCans}</span>
+              <div className="bg-amber-50 p-3 rounded-2xl border-2 border-amber-200 shadow-sm flex flex-col items-center justify-center text-center">
+                <span className="text-[11px] font-bold text-amber-700 uppercase tracking-widest mb-1">Pending</span>
+                <span className="text-2xl font-black text-amber-900">{pendingCans}</span>
               </div>
             </div>
           )}
@@ -326,7 +326,7 @@ export default function LookupSearchPage() {
           )}
 
           {results.length > 0 && (
-            <div className="space-y-3">
+            <div className="space-y-4">
               {results.map((record) => {
                 const date = new Date(record.test_performed_at)
                 const isAccepted = record.decision === 'accepted'
@@ -335,46 +335,41 @@ export default function LookupSearchPage() {
                   <button
                     key={record.id}
                     onClick={() => router.push(`/lookup/${record.reference_code}`)}
-                    className="w-full text-left bg-white p-4 rounded-xl border border-slate-200 shadow-sm hover:shadow-md hover:border-[#0f6041]/40 transition-all focus:outline-none focus:ring-2 focus:ring-[#0f6041] block relative"
+                    className="w-full text-left bg-card p-5 rounded-2xl border-2 border-input shadow-sm hover:shadow-md hover:border-primary/40 transition-all focus:outline-none focus:ring-2 focus:ring-primary block relative active:scale-[0.99]"
                   >
-                    <div className="flex justify-between items-start mb-2">
-                      <span className="text-[13px] font-bold text-slate-500 font-mono">
-                        Can ID: <span className="text-slate-800">{record.reference_code}</span>
+                    <div className="flex justify-between items-start mb-3">
+                      <span className="text-[14px] font-bold text-muted-foreground uppercase tracking-widest">
+                        CAN ID: <span className="text-foreground font-mono font-black text-[16px]">{record.reference_code}</span>
                       </span>
-                      <span className="text-[12px] font-semibold text-slate-400">
+                      <span className="text-[14px] font-bold text-muted-foreground bg-muted px-2 py-1 rounded-md">
                         {format(date, 'hh:mm a')}
                       </span>
                     </div>
 
-                    <div className="mb-3 border-b border-slate-100 pb-3">
-                      <p className="text-[15px] font-bold text-slate-900">
+                    <div className="mb-4 border-b-2 border-border pb-4">
+                      <p className="text-[18px] font-black text-foreground">
                         Farmer: {record.farmer_name}
                       </p>
                     </div>
                     
-                    <div className="flex justify-between items-center">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                       <div className="flex gap-4">
-                        {/* We don't have all inputs available in the UnifiedRecord type, 
-                            so we'll simulate the look, or we can just fetch everything.
-                            Since it's a unified record, I'll update the type to fetch volume/fat/snf.
-                            Wait, we can't change the fetch easily here without breaking everything. 
-                            Let's modify the UI to just show the status and overriding flags nicely. */}
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex flex-wrap items-center gap-2">
                           <span className={cn(
-                            "text-[13px] font-extrabold uppercase tracking-widest",
-                            isAccepted ? "text-emerald-600" : "text-red-600"
+                            "text-[14px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg",
+                            isAccepted ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"
                           )}>
                             {isAccepted ? 'Accepted' : 'Rejected'}
                           </span>
                           
                           {record.is_override && (
-                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider bg-amber-100 text-amber-800">
+                            <span className="text-[11px] font-bold px-2 py-1 rounded uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-200">
                               Override
                             </span>
                           )}
                           
                           {record.is_borderline && (
-                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider bg-orange-100 text-orange-800">
+                            <span className="text-[11px] font-bold px-2 py-1 rounded uppercase tracking-wider bg-orange-100 text-orange-800 border border-orange-200">
                               Border
                             </span>
                           )}
@@ -382,16 +377,16 @@ export default function LookupSearchPage() {
                       </div>
 
                       <div className={cn(
-                        "flex items-center text-[12px] font-bold px-2 py-1 rounded-full",
-                        record.sync_status === 'synced' ? "bg-slate-100 text-slate-600" : 
-                        record.sync_status === 'failed' ? "bg-red-50 text-red-600" : "bg-amber-50 text-amber-600"
+                        "flex items-center text-[12px] font-bold px-3 py-1.5 rounded-lg border",
+                        record.sync_status === 'synced' ? "bg-slate-100 text-slate-700 border-slate-200" : 
+                        record.sync_status === 'failed' ? "bg-red-50 text-red-700 border-red-200" : "bg-amber-50 text-amber-700 border-amber-200"
                       )}>
                         {record.sync_status === 'synced' ? (
-                          <><CheckCircle2 className="w-3.5 h-3.5 mr-1 text-emerald-500"/> Synced</>
+                          <><CheckCircle2 className="w-4 h-4 mr-1.5 text-emerald-600"/> Synced</>
                         ) : record.sync_status === 'failed' ? (
-                          <><CloudOff className="w-3.5 h-3.5 mr-1"/> Failed</>
+                          <><CloudOff className="w-4 h-4 mr-1.5"/> Failed</>
                         ) : (
-                          <><WifiOff className="w-3.5 h-3.5 mr-1"/> Pending</>
+                          <><WifiOff className="w-4 h-4 mr-1.5"/> Pending</>
                         )}
                       </div>
                     </div>

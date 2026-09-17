@@ -2,16 +2,14 @@
 
 import { useEffect, useState, use } from 'react'
 import { useRouter } from 'next/navigation'
-import { QRCodeCanvas } from 'qrcode.react'
-import { CheckCircle2, AlertTriangle, XCircle, ArrowLeft, Loader2, AlertCircle, Printer, QrCode } from 'lucide-react'
+import { CheckCircle2, XCircle, ArrowLeft, Loader2, AlertCircle, QrCode } from 'lucide-react'
 
 import { supabase } from '@/lib/supabase'
 import { getPendingEntries } from '@/lib/offlineQueue'
-import { REASON_LABELS } from '@/lib/grading'
 import { safeFetchErrorMessage } from '@/lib/errorMessages'
+import type { CanTestRow } from '@/types/database'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import type { CanTestRow, DbReasonCode } from '@/types/database'
 import { cn } from '@/lib/utils'
 
 export default function ResultPage({ params }: { params: Promise<{ reference: string }> | { reference: string } }) {
@@ -169,162 +167,97 @@ export default function ResultPage({ params }: { params: Promise<{ reference: st
   }
 
   const { 
-    finalDecision, isOverride, overrideReason, reasonCodes, isOffline,
-    canVolume, fatPercent, snfPercent, temperatureC, adulterationPositive,
-    farmerId, farmerName, operatorId, operatorName
+    finalDecision, isOffline
   } = record
   
   // Format the timestamp nicely for the slip
   const dateObj = new Date(record.testPerformedAt)
   const timeString = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   // Use a neat date format like "14 May 2024"
-  const dateString = dateObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
 
   return (
-    <div className="w-full bg-slate-50 p-4 sm:p-6 pb-24">
-      <div className="mx-auto max-w-lg space-y-5">
+    <div className="w-full bg-background min-h-screen p-4 sm:p-6 pb-24 flex flex-col justify-center">
+      <div className="mx-auto max-w-lg w-full space-y-8">
         
-        {/* Page Title & Header info */}
-        <div className="flex justify-between items-end mb-2 pt-2">
-          <div>
-            <p className="text-[11px] font-extrabold text-[#0f6041] tracking-wider uppercase mb-1">Quality Grading Result</p>
-            <h2 className="text-[28px] font-extrabold text-[#052b1f] leading-none flex items-center gap-2">
-              Completed &middot; <span className={cn("text-[16px] mt-1.5", isOffline ? "text-amber-600" : "text-[#7e9e94]")}>{isOffline ? 'Syncing' : 'Synced'}</span>
-            </h2>
-          </div>
-          <div className="text-right">
-            <p className="text-[14px] font-bold text-slate-900">Target</p>
-            <p className="text-[13px] text-slate-500">under 10 sec</p>
-          </div>
-        </div>
-
-        {/* Live Grading Box styled banner */}
-        <div className={cn(
-          "rounded-xl p-4 flex items-start gap-3 mt-4 border shadow-sm",
-          isOverride
-            ? "bg-amber-50 border-amber-200 text-amber-800"
-            : finalDecision === 'accepted'
-              ? "bg-[#eaf4ef] border-[#b0ebd1] text-[#0f6041]"
-              : "bg-red-50 border-red-200 text-red-700"
-        )}>
-          {isOverride ? (
-            <AlertTriangle className="w-6 h-6 shrink-0 mt-0.5" />
-          ) : finalDecision === 'accepted' ? (
-            <CheckCircle2 className="w-6 h-6 shrink-0 mt-0.5" />
+        {/* Giant Result Icon */}
+        <div className="flex flex-col items-center text-center space-y-4 py-8">
+          {finalDecision === 'accepted' ? (
+            <div className="w-24 h-24 rounded-full bg-emerald-100 flex items-center justify-center mb-2 shadow-inner">
+              <CheckCircle2 className="w-14 h-14 text-emerald-600" />
+            </div>
           ) : (
-            <XCircle className="w-6 h-6 shrink-0 mt-0.5" />
+            <div className="w-24 h-24 rounded-full bg-rose-100 flex items-center justify-center mb-2 shadow-inner">
+              <XCircle className="w-14 h-14 text-rose-600" />
+            </div>
           )}
           
-          <div className="flex-1">
-            <p className="text-[16px] font-bold">
-              {isOverride 
-                ? `OVERRIDDEN: ${finalDecision.toUpperCase()}`
-                : finalDecision === 'accepted' ? "Milk Accepted" : "Milk Rejected"}
-            </p>
-            <p className="text-[14px] opacity-80 leading-snug mt-1 font-medium">
-              {reasonCodes.length > 0 
-                ? reasonCodes.filter(c => !c.startsWith('INVALID_')).map(code => REASON_LABELS[code as DbReasonCode] || code).join(', ')
-                : "All tests passed successfully."}
-            </p>
-            {isOverride && (
-               <p className="mt-2 text-sm italic opacity-80 border-t border-amber-200/50 pt-2">“{overrideReason}”</p>
+          <h2 className={cn("text-[44px] font-extrabold tracking-tight leading-none", finalDecision === 'accepted' ? "text-emerald-700" : "text-rose-700")}>
+            {finalDecision === 'accepted' ? "ACCEPTED" : "REJECTED"}
+          </h2>
+          
+          <p className="text-[17px] text-muted-foreground font-medium max-w-[280px] mt-2">
+             {finalDecision === 'accepted' ? "Can recorded successfully" : "Can failed quality grading"}
+          </p>
+
+          <div className="bg-card border-2 border-input px-6 py-4 rounded-2xl mt-6 inline-flex flex-col items-center shadow-sm w-full max-w-[320px]">
+            <span className="text-[12px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Reference</span>
+            <span className="text-[18px] font-mono font-extrabold text-foreground">{record.referenceCode}</span>
+            {finalDecision === 'accepted' && (
+              <div className="mt-3 pt-3 border-t border-border w-full text-center flex flex-col items-center">
+                <span className="text-[12px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Tested At</span>
+                <span className="text-[16px] font-bold text-foreground">{timeString}</span>
+              </div>
             )}
           </div>
         </div>
 
-        {/* Inputs Recorded */}
-        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm space-y-4">
-          <div className="flex justify-between items-center border-b border-slate-100 pb-2 mb-3">
-            <h3 className="text-[16px] font-bold text-slate-900">Inputs Recorded</h3>
-            <span className="text-slate-400 font-mono text-[13px] font-medium">{record.referenceCode}</span>
-          </div>
-          
-          <div className="grid grid-cols-2 gap-4">
+        {isOffline && (
+          <div className="bg-amber-50 border-2 border-amber-200 p-4 rounded-2xl flex items-start gap-3 shadow-sm px-5">
+            <CheckCircle2 className="w-6 h-6 text-amber-600 shrink-0 mt-0.5" />
             <div>
-              <p className="text-[12px] text-slate-500 font-bold uppercase tracking-wider mb-1">Volume</p>
-              <p className="text-[16px] font-semibold text-slate-900">{canVolume !== undefined ? `${canVolume.toFixed(1)} L` : '--'}</p>
-            </div>
-            <div>
-              <p className="text-[12px] text-slate-500 font-bold uppercase tracking-wider mb-1">Fat</p>
-              <p className="text-[16px] font-semibold text-slate-900">{fatPercent?.toFixed(2)}%</p>
-            </div>
-            <div>
-              <p className="text-[12px] text-slate-500 font-bold uppercase tracking-wider mb-1">SNF</p>
-              <p className="text-[16px] font-semibold text-slate-900">{snfPercent?.toFixed(2)}%</p>
-            </div>
-            <div>
-              <p className="text-[12px] text-slate-500 font-bold uppercase tracking-wider mb-1">Temp</p>
-              <p className="text-[16px] font-semibold text-slate-900">{temperatureC?.toFixed(1)} &deg;C</p>
-            </div>
-            <div className="col-span-2">
-              <p className="text-[12px] text-slate-500 font-bold uppercase tracking-wider mb-1">Strip</p>
-              <p className={cn("text-[16px] font-semibold", adulterationPositive ? "text-red-600" : "text-emerald-600")}>
-                {adulterationPositive ? 'FAIL (Adulterated)' : 'PASS (Clear)'}
+              <h4 className="text-[16px] font-extrabold text-amber-900">SAVED OFFLINE</h4>
+              <p className="text-[14px] text-amber-700 font-medium leading-snug mt-1">
+                This record is safely stored on this device and will sync when connection returns.
               </p>
             </div>
-          </div>
-        </div>
-
-        {/* Farmer & Operator */}
-        <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm space-y-4">
-          <h3 className="text-[16px] font-bold text-slate-900 border-b border-slate-100 pb-2 mb-3">Farmer &amp; Operator</h3>
-          <div>
-            <p className="text-[12px] text-slate-500 font-bold uppercase tracking-wider mb-1">Farmer</p>
-            <p className="text-[16px] font-semibold text-slate-900">#{farmerId.substring(0,6)}, {farmerName}</p>
-          </div>
-          <div>
-            <p className="text-[12px] text-slate-500 font-bold uppercase tracking-wider mb-1">Timestamp</p>
-            <p className="text-[15px] font-medium text-slate-900">{dateString}, {timeString}</p>
-          </div>
-          <div>
-            <p className="text-[12px] text-slate-500 font-bold uppercase tracking-wider mb-1">Operator ID</p>
-            <p className="text-[15px] font-medium text-slate-900">{operatorId.substring(0,8).toUpperCase()} {operatorName ? `(${operatorName})` : ''}</p>
-          </div>
-        </div>
-
-
-
-        {finalDecision === 'rejected' && (
-          <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm flex flex-col items-center justify-center mt-4">
-            <QRCodeCanvas 
-               value={typeof window !== 'undefined' ? `${window.location.origin}/lookup/${encodeURIComponent(record.referenceCode)}` : ''}
-               size={140}
-               level="M"
-               includeMargin={false}
-            />
-            <p className="mt-4 text-[12px] font-bold text-slate-500 uppercase tracking-widest text-center">
-              Scan to view this test record
-            </p>
           </div>
         )}
 
         {/* Actions */}
-        <div className="pt-2 space-y-3">
-          {finalDecision === 'rejected' && (
-            <Button
-              onClick={() => router.push(`/slip/${record.referenceCode}`)}
-              className="w-full h-14 text-[17px] font-bold rounded-xl bg-red-600 hover:bg-red-700 text-white shadow-sm"
-            >
-              <QrCode className="w-5 h-5 mr-2" /> Share Rejection Slip
-            </Button>
+        <div className="pt-2 space-y-4 px-2">
+          {finalDecision === 'rejected' ? (
+            <>
+              <Button
+                onClick={() => router.push(`/slip/${record.referenceCode}`)}
+                className="w-full h-16 text-[18px] font-extrabold rounded-2xl bg-rose-600 hover:bg-rose-700 text-white shadow-md active:scale-[0.98] transition-all"
+              >
+                <QrCode className="w-6 h-6 mr-2" /> Share Rejection Slip
+              </Button>
+              <Button 
+                onClick={() => router.push('/')} 
+                variant="outline"
+                className="w-full h-16 text-[18px] font-bold rounded-2xl border-2 border-input bg-card text-foreground hover:bg-muted active:scale-[0.98] transition-all"
+              >
+                 Next Can
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button 
+                onClick={() => router.push('/')} 
+                className="w-full h-16 text-[18px] font-extrabold rounded-2xl bg-primary hover:bg-primary/90 text-primary-foreground shadow-md active:scale-[0.98] transition-all"
+              >
+                 New Can
+              </Button>
+              <Button
+                onClick={() => router.push(`/lookup/${record.referenceCode}`)}
+                variant="outline"
+                className="w-full h-16 text-[18px] font-bold rounded-2xl border-2 border-input bg-card text-foreground hover:bg-muted active:scale-[0.98] transition-all"
+              >
+                View Record
+              </Button>
+            </>
           )}
-
-          {finalDecision === 'accepted' && (
-            <Button
-              onClick={() => window.print()}
-              variant="outline"
-              className="w-full h-14 text-[17px] font-bold rounded-xl border-slate-200 bg-white hover:bg-slate-50 text-slate-800"
-            >
-              <Printer className="w-5 h-5 mr-2" /> Print Receipt
-            </Button>
-          )}
-
-          <Button 
-            onClick={() => router.push('/')} 
-            className="w-full h-14 text-[17px] font-bold rounded-xl bg-[#0f6041] hover:bg-[#0c4a32] text-white shadow-sm"
-          >
-             Next Can
-          </Button>
         </div>
 
       </div>

@@ -1,16 +1,11 @@
 /**
  * useNetworkStatus — React hook for offline resilience UI.
  *
- * Tracks:
- *   - navigator.onLine status (with window event listeners)
- *   - pending / failed entry counts from IndexedDB
- *   - sync-in-progress flag
- *   - auto-sync on reconnect
- *
- * Safe across:
- *   - page refresh (reads IndexedDB on mount)
- *   - browser close/reopen
- *   - repeated online/offline transitions
+ * SYNC ARCHITECTURE:
+ *   - syncLock ref prevents concurrent doSync() calls (single-flight)
+ *   - syncQueue promise-chain ensures callers don't stack up
+ *   - Progress updated per-record via onProgress callback to offlineQueue
+ *   - No useEffect dependency on doSync — stable initial-sync via mount ref
  */
 
 'use client'
@@ -28,9 +23,10 @@ export interface NetworkStatus {
   pendingCount: number
   failedCount: number
   isSyncing: boolean
+  syncProgress: { current: number; total: number } | null
   lastSyncResult: SyncResult | null
-  triggerSync: () => Promise<void>
-  triggerRetry: () => Promise<void>
+  triggerSync: () => void
+  triggerRetry: () => void
   refreshCounts: () => Promise<void>
 }
 
@@ -41,9 +37,13 @@ export function NetworkStatusProvider({ children }: { children: React.ReactNode 
   const [pendingCount, setPendingCount] = useState(0)
   const [failedCount, setFailedCount] = useState(0)
   const [isSyncing, setIsSyncing] = useState(false)
+  const [syncProgress, setSyncProgress] = useState<{ current: number; total: number } | null>(null)
   const [lastSyncResult, setLastSyncResult] = useState<SyncResult | null>(null)
 
-  const syncQueue = useRef<Promise<void>>(Promise.resolve())
+  // ── Single-flight lock: only ONE sync can run at a time ───────────────────
+  const syncLock = useRef(false)
+  // ── Prevent auto-sync from firing again if already triggered on mount ─────
+  const mountSyncFired = useRef(false)
 
   const refreshCounts = useCallback(async () => {
     try {
@@ -51,62 +51,84 @@ export function NetworkStatusProvider({ children }: { children: React.ReactNode 
       setPendingCount(summary.pending)
       setFailedCount(summary.failed)
     } catch {
-      // Ignore
+      // Ignore — IndexedDB may not be available in SSR
     }
   }, [])
 
-  const doSync = useCallback(() => {
-    syncQueue.current = syncQueue.current.then(async () => {
-      setIsSyncing(true)
-      try {
-        const result = await syncPendingEntries()
-        setLastSyncResult(result)
-      } catch (err) {
-        console.error('Sync failed:', err)
-      } finally {
-        setIsSyncing(false)
-        await refreshCounts()
+  // ── Core sync runner — always serialized via lock ref ────────────────────
+  const runSync = useCallback(async (mode: 'sync' | 'retry') => {
+    // Single-flight lock: if already syncing, ignore
+    if (syncLock.current) return
+    syncLock.current = true
+    setIsSyncing(true)
+    setSyncProgress(null)
+
+    try {
+      // Get the total count before starting so we can show progress
+      const summary = await getQueueSummary()
+      const total = mode === 'retry'
+        ? summary.pending + summary.failed
+        : summary.pending
+
+      if (total === 0) {
+        setSyncProgress(null)
+        return
       }
-    })
-    return syncQueue.current
+
+      setSyncProgress({ current: 0, total })
+
+      let result: SyncResult
+      if (mode === 'retry') {
+        result = await retryFailedEntries((processed) => {
+          setSyncProgress({ current: processed, total })
+        })
+      } else {
+        result = await syncPendingEntries((processed) => {
+          setSyncProgress({ current: processed, total })
+        })
+      }
+
+      setLastSyncResult(result)
+    } catch (err) {
+      console.error('Sync failed:', err)
+    } finally {
+      syncLock.current = false
+      setIsSyncing(false)
+      setSyncProgress(null)
+      await refreshCounts()
+    }
   }, [refreshCounts])
 
-  const triggerSync = useCallback(async () => {
-    await doSync()
-  }, [doSync])
+  const triggerSync = useCallback(() => {
+    runSync('sync')
+  }, [runSync])
 
   const triggerRetry = useCallback(() => {
-    syncQueue.current = syncQueue.current.then(async () => {
-      setIsSyncing(true)
-      try {
-        const result = await retryFailedEntries()
-        setLastSyncResult(result)
-      } catch (err) {
-        console.error('Retry failed:', err)
-      } finally {
-        setIsSyncing(false)
-        await refreshCounts()
-      }
-    })
-    return syncQueue.current
-  }, [refreshCounts])
+    runSync('retry')
+  }, [runSync])
 
+  // ── Mount effect — read counts, auto-sync once if online ─────────────────
   useEffect(() => {
     if (typeof navigator !== 'undefined') {
       setIsOnline(navigator.onLine)
     }
 
+    // Initial count read + auto-sync once on mount
     refreshCounts().then(() => {
-      if (typeof navigator !== 'undefined' && navigator.onLine) {
-        doSync()
+      if (!mountSyncFired.current && typeof navigator !== 'undefined' && navigator.onLine) {
+        mountSyncFired.current = true
+        runSync('sync')
       }
     })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // intentionally empty — runSync/refreshCounts are stable but we only want this once
 
+  // ── Online/offline event listeners ────────────────────────────────────────
+  useEffect(() => {
     const handleOnline = () => {
       setIsOnline(true)
-      doSync()
+      runSync('sync') // lock prevents double-sync if already running
     }
-
     const handleOffline = () => {
       setIsOnline(false)
     }
@@ -118,7 +140,7 @@ export function NetworkStatusProvider({ children }: { children: React.ReactNode 
       window.removeEventListener('online', handleOnline)
       window.removeEventListener('offline', handleOffline)
     }
-  }, [doSync, refreshCounts])
+  }, [runSync])
 
   return (
     <NetworkStatusContext.Provider
@@ -127,6 +149,7 @@ export function NetworkStatusProvider({ children }: { children: React.ReactNode 
         pendingCount,
         failedCount,
         isSyncing,
+        syncProgress,
         lastSyncResult,
         triggerSync,
         triggerRetry,

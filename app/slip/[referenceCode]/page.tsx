@@ -228,9 +228,9 @@ export default function RejectionSlipPage({ params }: { params: Promise<{ refere
   // 6. ACCEPTED RESULT
   if (record.decision === 'accepted') {
     return (
-      <div className="min-h-screen bg-slate-50 p-4 md:p-6 flex items-center justify-center">
+      <div className="min-h-screen bg-background p-4 md:p-6 flex items-center justify-center">
         <div className="w-full max-w-md space-y-6">
-          <Card className="shadow-sm border-emerald-200 overflow-hidden">
+          <Card className="shadow-sm border-2 border-emerald-200 overflow-hidden rounded-2xl">
             <div className="bg-emerald-600 p-8 text-center text-white">
               <CheckCircle2 className="w-20 h-20 mx-auto mb-4 opacity-90" />
               <h1 className="text-2xl font-black tracking-tight mb-1 uppercase">
@@ -238,44 +238,44 @@ export default function RejectionSlipPage({ params }: { params: Promise<{ refere
               </h1>
               <p className="text-emerald-100 font-medium font-mono text-lg">{record.referenceCode}</p>
             </div>
-            <CardContent className="p-6 bg-white space-y-4">
+            <CardContent className="p-6 bg-card space-y-4">
               {record.isBorderline && (
-                <div className="bg-amber-50 border border-amber-200 px-3 py-2 font-bold text-amber-900 text-sm">
+                <div className="bg-amber-50 border-2 border-amber-200 px-3 py-2 font-bold text-amber-900 text-sm rounded-lg">
                   BORDERLINE — REVIEW
                 </div>
               )}
               <div className="flex justify-between border-b pb-2">
-                <span className="text-slate-500 font-medium">Farmer</span>
-                <span className="font-bold text-slate-900 text-right">{record.farmerName}</span>
+                <span className="text-muted-foreground font-medium">Farmer</span>
+                <span className="font-bold text-foreground text-right">{record.farmerName}</span>
               </div>
               <div className="flex justify-between border-b pb-2">
-                <span className="text-slate-500 font-medium">Tested At</span>
-                <span className="font-medium text-slate-900 text-right">{dateString} {timeString}</span>
+                <span className="text-muted-foreground font-medium">Tested At</span>
+                <span className="font-medium text-foreground text-right">{dateString} {timeString}</span>
               </div>
               {record.canVolume !== undefined && (
                  <div className="flex justify-between border-b pb-2">
-                    <span className="text-slate-500 font-medium">Volume</span>
-                    <span className="font-medium text-slate-900 text-right">{record.canVolume} L</span>
+                    <span className="text-muted-foreground font-medium">Volume</span>
+                    <span className="font-medium text-foreground text-right">{record.canVolume} L</span>
                  </div>
               )}
               {record.isOverride && (
                  <div className="pt-2">
-                    <span className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">System Suggestion</span>
-                    <span className="font-bold text-slate-600 line-through uppercase mb-3 block">
+                    <span className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">System Suggestion</span>
+                    <span className="font-bold text-muted-foreground line-through uppercase mb-3 block">
                       {record.autoDecision || 'Unavailable for this legacy record'}
                     </span>
                     
-                    <span className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-0.5">Override Reason</span>
+                    <span className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-0.5">Override Reason</span>
                     {record.overrideReason ? (
-                      <span className="font-medium text-slate-900 italic">&quot;{record.overrideReason}&quot;</span>
+                      <span className="font-medium text-foreground italic">&quot;{record.overrideReason}&quot;</span>
                     ) : (
-                      <span className="font-medium text-slate-500">No override reason provided</span>
+                      <span className="font-medium text-muted-foreground">No override reason provided</span>
                     )}
                  </div>
               )}
             </CardContent>
           </Card>
-          <Button onClick={() => router.push('/')} className="w-full h-14 text-lg font-bold">
+          <Button onClick={() => router.push('/')} className="w-full h-16 text-[18px] font-extrabold rounded-2xl bg-primary hover:bg-primary/90 text-primary-foreground shadow-md active:scale-[0.98] transition-all">
             <ArrowLeft className="w-5 h-5 mr-2" /> Back to Intake
           </Button>
         </div>
@@ -285,9 +285,9 @@ export default function RejectionSlipPage({ params }: { params: Promise<{ refere
 
   // REJECTION SLIP
   return (
-    <div className="min-h-screen bg-slate-100 p-4 pb-24 md:py-8 flex flex-col items-center">
+    <div className="min-h-screen bg-background p-4 pb-24 md:py-8 flex flex-col items-center">
       {record.isOffline && (
-        <div className="mb-4 w-full max-w-[375px] p-3 bg-amber-50 text-amber-800 border border-amber-200 rounded-lg text-sm font-medium flex items-center gap-2 shadow-sm">
+        <div className="mb-4 w-full max-w-[375px] p-3 bg-amber-50 text-amber-800 border-2 border-amber-200 rounded-2xl text-sm font-bold flex items-center gap-2 shadow-sm">
           <AlertTriangle className="w-5 h-5 shrink-0" />
           Pending sync — showing offline record
         </div>
@@ -296,72 +296,72 @@ export default function RejectionSlipPage({ params }: { params: Promise<{ refere
       {/* Slip Wrapper for Export */}
       <div 
         ref={slipRef}
-        className="w-[375px] max-w-full bg-white shadow-xl rounded-none border border-slate-200 overflow-hidden"
+        className="w-[375px] max-w-full bg-white shadow-xl rounded-none border-2 border-slate-200 overflow-hidden"
         style={{
           boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)'
         }}
       >
         {/* Header */}
-        <div className="pt-8 pb-6 px-6 text-center border-b-[3px] border-black">
+        <div className="pt-8 pb-6 px-6 text-center border-b-4 border-black">
           <h2 className="text-sm font-bold uppercase tracking-widest text-slate-500 mb-2">MCC Central</h2>
-          <h1 className="text-2xl font-black uppercase tracking-tight text-black leading-tight">
-            MILK CAN<br/>REJECTION SLIP
+          <h1 className="text-3xl font-black uppercase tracking-tight text-black leading-tight">
+            MILK CAN<br/>REJECTION
           </h1>
         </div>
 
         {/* Core Evidence */}
-        <div className="px-6 py-5 border-b-2 border-slate-100 space-y-4">
+        <div className="px-6 py-5 border-b-2 border-slate-200 space-y-4 bg-white">
           <div className="flex flex-col">
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Original Test Record</span>
-            <span className="font-mono text-xl font-bold tracking-tight text-black">{record.referenceCode}</span>
+            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1">Original Test Record</span>
+            <span className="font-mono text-xl font-black tracking-tight text-black">{record.referenceCode}</span>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <span className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-0.5">Tested At</span>
-              <span className="font-semibold text-slate-800">{dateString} {timeString}</span>
+              <span className="block text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Tested At</span>
+              <span className="font-bold text-black">{dateString} {timeString}</span>
             </div>
             <div>
-               <span className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-0.5">Recorded By</span>
-               <span className="font-semibold text-slate-800">{record.operatorName}</span>
+               <span className="block text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Recorded By</span>
+               <span className="font-bold text-black">{record.operatorName}</span>
             </div>
           </div>
           
           <div>
-            <span className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-0.5">Farmer</span>
-            <span className="text-lg font-bold text-black">{record.farmerName}</span>
+            <span className="block text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Farmer</span>
+            <span className="text-lg font-black text-black">{record.farmerName}</span>
           </div>
         </div>
 
         {/* Test Values */}
-        <div className="px-6 py-5 border-b-2 border-slate-100 bg-slate-50/50">
-          <h3 className="text-sm font-bold uppercase tracking-widest text-slate-900 mb-4 border-l-4 border-black pl-2">
+        <div className="px-6 py-5 border-b-2 border-slate-200 bg-slate-50">
+          <h3 className="text-sm font-black uppercase tracking-widest text-black mb-4 border-l-4 border-black pl-2">
             Physical Readings
           </h3>
           
           <div className="grid grid-cols-2 gap-y-4 gap-x-6">
             {record.canVolume !== undefined && (
               <div className="col-span-2 flex justify-between border-b border-slate-200 pb-2">
-                <span className="font-medium text-slate-600">Volume</span>
-                <span className="font-bold text-black">{record.canVolume.toFixed(1)} L</span>
+                <span className="font-bold text-slate-600">Volume</span>
+                <span className="font-black text-black">{record.canVolume.toFixed(1)} L</span>
               </div>
             )}
             
             <div className="flex flex-col">
-              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Fat</span>
-              <span className="text-lg font-bold text-black">{record.fatPercent.toFixed(2)}%</span>
+              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Fat</span>
+              <span className="text-lg font-black text-black">{record.fatPercent.toFixed(2)}%</span>
             </div>
             <div className="flex flex-col">
-              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">SNF</span>
-              <span className="text-lg font-bold text-black">{record.snfPercent.toFixed(2)}%</span>
+              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">SNF</span>
+              <span className="text-lg font-black text-black">{record.snfPercent.toFixed(2)}%</span>
             </div>
             <div className="flex flex-col">
-              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Temp</span>
-              <span className="text-lg font-bold text-black">{record.temperatureC.toFixed(1)}°C</span>
+              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Temp</span>
+              <span className="text-lg font-black text-black">{record.temperatureC.toFixed(1)}°C</span>
             </div>
             <div className="flex flex-col">
-              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Adulteration</span>
-              <span className={cn("text-lg font-bold", record.adulterationPositive ? "text-red-600" : "text-black")}>
+              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">Adulteration</span>
+              <span className={cn("text-lg font-black", record.adulterationPositive ? "text-black" : "text-slate-500")}>
                 {record.adulterationPositive ? 'FAIL' : 'PASS'}
               </span>
             </div>
@@ -369,11 +369,11 @@ export default function RejectionSlipPage({ params }: { params: Promise<{ refere
         </div>
 
         {/* Reason / Outcome */}
-        <div className="px-6 py-6 border-b-2 border-slate-100">
+        <div className="px-6 py-6 border-b-2 border-slate-200 bg-white">
           
           {/* Borderline explicitly visible */}
           {record.isBorderline && (
-             <div className="mb-4 inline-block bg-slate-100 border-l-4 border-slate-800 px-3 py-1.5 font-bold text-slate-800 text-sm">
+             <div className="mb-4 inline-block bg-white border-2 border-black px-3 py-1.5 font-black text-black text-sm uppercase tracking-wider">
                 BORDERLINE — REVIEW
              </div>
           )}
@@ -381,38 +381,38 @@ export default function RejectionSlipPage({ params }: { params: Promise<{ refere
           {record.isOverride ? (
             <div className="space-y-4">
               <div className="opacity-75">
-                <span className="block text-xs font-bold uppercase tracking-wider mb-1">System Suggestion</span>
-                <span className="font-black text-lg line-through uppercase">
+                <span className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-1">System Suggestion</span>
+                <span className="font-black text-lg line-through uppercase text-slate-600">
                   {record.autoDecision || 'Unavailable for this legacy record'}
                 </span>
               </div>
-              <div className="bg-red-50 border border-red-100 p-3 rounded">
-                 <span className="block text-xs font-bold text-red-800 uppercase tracking-wider mb-1">Final Decision</span>
-                 <span className="font-black text-xl text-red-900">REJECTED</span>
-                 <span className="block font-bold text-sm text-red-700 mt-1 uppercase tracking-tight">— OPERATOR OVERRIDE —</span>
+              <div className="bg-white border-2 border-black p-3">
+                 <span className="block text-[11px] font-bold text-black uppercase tracking-widest mb-1">Final Decision</span>
+                 <span className="font-black text-2xl text-black">REJECTED</span>
+                 <span className="block font-bold text-xs text-black mt-1 uppercase tracking-wider">— OPERATOR OVERRIDE —</span>
               </div>
               <div>
-                <span className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-0.5">Override Reason</span>
+                <span className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-0.5">Override Reason</span>
                 {record.overrideReason ? (
-                  <span className="font-medium text-slate-900 italic">&quot;{record.overrideReason}&quot;</span>
+                  <span className="font-bold text-black italic">&quot;{record.overrideReason}&quot;</span>
                 ) : (
-                  <span className="font-medium text-slate-500">No override reason provided</span>
+                  <span className="font-bold text-slate-500">No override reason provided</span>
                 )}
               </div>
             </div>
           ) : (
             <div>
-               <span className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Final Decision</span>
-               <span className="font-black text-2xl text-black">REJECTED</span>
+               <span className="block text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1">Final Decision</span>
+               <span className="font-black text-3xl text-black">REJECTED</span>
             </div>
           )}
 
           {record.reasonCodes.length > 0 && (
             <div className="mt-5">
-              <span className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Rejection Remarks</span>
+              <span className="block text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-2">Rejection Remarks</span>
               <ul className="space-y-2">
                 {record.reasonCodes.map(code => (
-                  <li key={code} className="flex items-start text-black font-semibold">
+                  <li key={code} className="flex items-start text-black font-bold text-sm">
                     <span className="mr-2 mt-1.5 block w-1.5 h-1.5 bg-black rounded-full shrink-0"></span>
                     {REASON_LABELS[code] || code}
                   </li>
@@ -424,31 +424,31 @@ export default function RejectionSlipPage({ params }: { params: Promise<{ refere
 
         {/* QR Code */}
         {lookupUrl && (
-          <div className="px-6 py-8 flex flex-col items-center justify-center bg-slate-50 text-center">
+          <div className="px-6 py-8 flex flex-col items-center justify-center bg-white text-center">
             <QRCodeCanvas 
                value={lookupUrl}
-               size={120}
+               size={140}
                level="M"
                includeMargin={false}
             />
-            <p className="mt-4 text-xs font-bold text-slate-500 uppercase tracking-widest">
-              Scan to view this test record
+            <p className="mt-4 text-[11px] font-black text-black uppercase tracking-widest">
+              SCAN TO VIEW RECORD
             </p>
           </div>
         )}
       </div>
 
       {/* Actions (Excluded from Export) */}
-      <div className="w-[375px] max-w-full mt-6 space-y-3 pb-8">
+      <div className="w-[375px] max-w-full mt-8 space-y-3 pb-8">
         {error && (
-          <div className="p-3 bg-red-50 text-red-700 border border-red-200 rounded-lg text-sm font-medium">
+          <div className="p-3 bg-rose-50 text-rose-700 border-2 border-rose-200 rounded-2xl text-sm font-bold">
             {error}
           </div>
         )}
         <div className="grid grid-cols-2 gap-3">
           <Button 
             variant="outline" 
-            className="h-14 font-bold bg-white text-slate-700 hover:text-slate-900"
+            className="h-16 text-[16px] font-extrabold rounded-2xl border-2 border-input bg-card text-foreground hover:bg-muted active:scale-[0.98] transition-all"
             onClick={() => handleExport('download')}
             disabled={isExporting}
           >
@@ -456,7 +456,7 @@ export default function RejectionSlipPage({ params }: { params: Promise<{ refere
             Save Image
           </Button>
           <Button 
-            className="h-14 font-bold bg-blue-600 hover:bg-blue-700 text-white"
+            className="h-16 text-[16px] font-extrabold rounded-2xl bg-primary hover:bg-primary/90 text-primary-foreground shadow-md active:scale-[0.98] transition-all"
             onClick={() => handleExport('share')}
             disabled={isExporting}
           >
@@ -467,11 +467,11 @@ export default function RejectionSlipPage({ params }: { params: Promise<{ refere
         
         <Button 
           variant="ghost"
-          className="w-full h-14 font-bold text-slate-500 hover:text-slate-800 mt-2"
+          className="w-full h-16 text-[16px] font-bold text-muted-foreground hover:text-foreground mt-2 rounded-2xl"
           onClick={() => router.push('/')}
         >
           <ArrowLeft className="w-5 h-5 mr-2" />
-          Back to Intake
+          Next Can
         </Button>
       </div>
     </div>

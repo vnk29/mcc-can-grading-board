@@ -17,7 +17,7 @@ AS $$
 DECLARE
   v_actual_can_test_id UUID;
 BEGIN
-  IF p_new_values->>'decision' != 'accepted' THEN
+  IF p_new_values->>'decision' IS DISTINCT FROM 'accepted' THEN
     RAISE EXCEPTION 'Correction must result in an accepted decision';
   END IF;
 

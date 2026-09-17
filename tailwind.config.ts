@@ -43,6 +43,13 @@ const config: Config = {
           DEFAULT: "var(--card)",
           foreground: "var(--card-foreground)",
         },
+        mcc: {
+          green: "#0b5e4a",
+          dark: "#08493a",
+          light: "#eaf3ef",
+          red: "#d32f2f",
+          gray: "#f8f9fa",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",

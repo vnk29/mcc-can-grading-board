@@ -38,7 +38,10 @@ Run the SQL migrations in order against your Supabase Postgres:
 1. `supabase/migrations/001_initial_schema.sql` — tables, RLS, immutability policies
 2. `supabase/migrations/002_security_fixes.sql` — `auto_decision`, `is_borderline`
 3. `supabase/migrations/003_security_fixes.sql` — `borderline_flags`, secure correction RPC
-4. `supabase/seed.sql` — 2 operators, 5 farmers, 10 sample can tests (optional, demo only)
+4. `supabase/migrations/004_disputes_and_evidence.sql` — disputes tracking and resolution RPC
+5. `supabase/migrations/005_unified_resolution_rpc.sql` — unified correction RPC integration
+6. `supabase/migrations/006_operator_access_hardening.sql` — secure `operator_profiles` view
+7. `supabase/seed.sql` — demo operators, farmers, and sample data
 
 ### Run
 ```bash
@@ -101,6 +104,7 @@ Every record carries two timestamps:
 - **No photo evidence** — `photo_url` is nullable; the record and slip remain usable as text-only.
 - **Correction authorization** — `submit_correction` is a `SECURITY DEFINER` RPC that verifies operator PIN server-side; the client cannot bypass it.
 - **Legacy rows** — `auto_decision` and `is_borderline` are nullable on old rows; the UI degrades gracefully ("Unavailable for this legacy record").
+- **Offline metrics & queues** — local IDB items seamlessly merge with remote Supabase records in the daily dashboard and lookup screens so that the operator always sees an accurate local representation.
 
 ---
 
@@ -120,12 +124,17 @@ Every record carries two timestamps:
 ```
 app/
   page.tsx                    # Intake form (operator login + grading)
-  lookup/                     # Dispute search + record detail + correction modal
+  dashboard/                  # Daily summary dashboard (liters, disputes, causes)
+  disputes/                   # Operator queue to review and settle open disputes
+  lookup/                     # Farmer view & record detail
   result/[reference]/         # Post-submit result screen
   slip/[referenceCode]/       # Rejection slip (PNG/PDF export, QR)
 components/
+  AppHeader.tsx               # Main application navigation header
+  BottomNav.tsx               # Mobile-friendly bottom navigation
   SyncStatusBar.tsx           # Persistent online/offline/sync indicator
-  ui/                         # 12 hand-rolled primitives
+  ui/                         # Hand-rolled primitives
+
 lib/
   grading.ts                  # Canonical grading engine + mapToDbInsert
   config.ts                   # Quality thresholds
@@ -169,6 +178,9 @@ In the Supabase **SQL Editor**, run each migration file in order:
 supabase/migrations/001_initial_schema.sql
 supabase/migrations/002_security_fixes.sql
 supabase/migrations/003_security_fixes.sql
+supabase/migrations/004_disputes_and_evidence.sql
+supabase/migrations/005_unified_resolution_rpc.sql
+supabase/migrations/006_operator_access_hardening.sql
 ```
 Optionally load demo data: `supabase/seed.sql`
 

@@ -18,14 +18,14 @@ export function BottomNav() {
   const totalQueued = pendingCount + failedCount
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-50 pb-safe">
-      <div className="max-w-md mx-auto flex justify-between items-center px-2 py-2">
+    <div className="w-full bg-card border-t-2 border-border shadow-sm pb-safe">
+      <div className="max-w-lg mx-auto flex justify-between items-center px-2 py-2">
         {/* Intake Tab */}
         <Link 
           href="/"
           className={cn(
-            "flex-1 min-w-0 flex flex-col items-center justify-center p-2 transition-colors",
-            isIntake ? "text-[#0f6041]" : "text-slate-500 hover:text-slate-900"
+            "flex-1 min-w-0 flex flex-col items-center justify-center p-2 transition-colors active:scale-95",
+            isIntake ? "text-mcc-green" : "text-muted-foreground hover:text-foreground"
           )}
         >
           <Plus className="w-6 h-6 mb-1" strokeWidth={isIntake ? 2.5 : 2} />
@@ -36,8 +36,8 @@ export function BottomNav() {
         <Link 
           href="/dashboard"
           className={cn(
-            "flex-1 min-w-0 flex flex-col items-center justify-center p-2 transition-colors",
-            isDashboard ? "text-[#0f6041]" : "text-slate-500 hover:text-slate-900"
+            "flex-1 min-w-0 flex flex-col items-center justify-center p-2 transition-colors active:scale-95",
+            isDashboard ? "text-mcc-green" : "text-muted-foreground hover:text-foreground"
           )}
         >
           <LayoutDashboard className="w-6 h-6 mb-1" strokeWidth={isDashboard ? 2.5 : 2} />
@@ -48,8 +48,8 @@ export function BottomNav() {
         <Link 
           href="/lookup"
           className={cn(
-            "flex-1 min-w-0 flex flex-col items-center justify-center p-2 transition-colors",
-            isRecords ? "text-[#0f6041]" : "text-slate-500 hover:text-slate-900"
+            "flex-1 min-w-0 flex flex-col items-center justify-center p-2 transition-colors active:scale-95",
+            isRecords ? "text-mcc-green" : "text-muted-foreground hover:text-foreground"
           )}
         >
           <History className="w-6 h-6 mb-1" strokeWidth={isRecords ? 2.5 : 2} />
@@ -60,8 +60,8 @@ export function BottomNav() {
         <Link 
           href="/disputes"
           className={cn(
-            "flex-1 min-w-0 flex flex-col items-center justify-center p-2 transition-colors",
-            isDisputes ? "text-[#0f6041]" : "text-slate-500 hover:text-slate-900"
+            "flex-1 min-w-0 flex flex-col items-center justify-center p-2 transition-colors active:scale-95",
+            isDisputes ? "text-mcc-green" : "text-muted-foreground hover:text-foreground"
           )}
         >
           <Scale className="w-6 h-6 mb-1" strokeWidth={isDisputes ? 2.5 : 2} />
@@ -71,26 +71,23 @@ export function BottomNav() {
         {/* Sync Action */}
         <button
           onClick={() => {
-            if (!isOnline) {
-              alert("You are offline. Connect to internet to sync.")
-              return
-            }
+            if (!isOnline || isSyncing) return
             if (failedCount > 0) triggerRetry()
             else if (pendingCount > 0) triggerSync()
-            else alert("All records are fully synced!")
+            // If nothing to sync, button does nothing (visually disabled)
           }}
-          disabled={isSyncing}
+          disabled={isSyncing || !isOnline || (pendingCount === 0 && failedCount === 0)}
           className={cn(
-            "flex flex-col items-center justify-center p-2 min-w-[72px] transition-colors relative",
+            "flex flex-col items-center justify-center p-2 min-w-[72px] transition-colors relative active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed",
             isSyncing 
               ? "text-amber-600" 
               : totalQueued > 0 
-                ? "text-[#0f6041]"
-                : "text-slate-400 hover:text-slate-900"
+                ? "text-mcc-green"
+                : "text-muted-foreground/60"
           )}
         >
           {totalQueued > 0 && !isSyncing && (
-            <span className="absolute top-1.5 right-3 w-2.5 h-2.5 rounded-full bg-red-500 border-2 border-white" />
+            <span className="absolute top-1.5 right-3 w-3 h-3 rounded-full bg-rose-500 border-2 border-card shadow-sm" />
           )}
           {isSyncing ? (
             <Loader2 className="w-6 h-6 mb-1 animate-spin" />
