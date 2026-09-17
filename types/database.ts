@@ -50,6 +50,8 @@ export type DbReasonCode =
   | 'LOW_SNF'
   | 'HIGH_TEMPERATURE'
   | 'ADULTERATION_DETECTED'
+  | 'HIGH_ACIDITY'
+  | 'SEDIMENT_DETECTED'
   | 'OPERATOR_OVERRIDE'
 
 /**
@@ -134,6 +136,16 @@ export type CanTestRow = {
   override_reason: string | null
   reference_code: string
   photo_url: string | null
+  /**
+   * Type of mandatory evidence for rejected cans. 'photo' = photo_url populated;
+   * 'sensory' = sensory_note populated. Null for accepted cans and pre-migration rows.
+   */
+  evidence_type: 'photo' | 'sensory' | null
+  /**
+   * Free-text sensory or inspector note. Populated when evidence_type = 'sensory'.
+   * Null otherwise. Immutable — set at INSERT time.
+   */
+  sensory_note: string | null
   /** When the physical test was performed on the device (client-supplied). */
   test_performed_at: string
   /** When the row was inserted into the database (server-stamped). */
@@ -160,6 +172,10 @@ export type CanTestInsert = {
   override_reason?: string | null
   reference_code: string
   photo_url?: string | null
+  /** 'photo' | 'sensory' — required for rejected cans. Null for accepted cans. */
+  evidence_type?: 'photo' | 'sensory' | null
+  /** Sensory note text. Required when evidence_type = 'sensory'. */
+  sensory_note?: string | null
   /** Must be provided by the client — represents actual test time on device. */
   test_performed_at: string
   created_at?: string  // server-stamped; omit to use DEFAULT now()
@@ -185,6 +201,35 @@ export type CorrectionInsert = {
   corrected_by: string
   reason: string
   created_at?: string
+}
+
+// ─── Disputes ────────────────────────────────────────────────────────────────
+
+export type DisputeStatus = 'open' | 'resolved'
+export type DisputeResolutionType = 'adjustment' | 'final_rejection'
+
+export type DisputeRow = {
+  id: string
+  can_test_id: string
+  farmer_message: string
+  submitted_at: string
+  status: DisputeStatus
+  /** Null until the dispute is resolved. */
+  resolved_at: string | null
+  /** Operator UUID who resolved. Null until resolved. */
+  resolved_by: string | null
+  /** Null until resolved. */
+  resolution_type: DisputeResolutionType | null
+  /** Null until resolved. */
+  resolution_reason: string | null
+}
+
+export type DisputeInsert = {
+  id?: string
+  can_test_id: string
+  farmer_message: string
+  submitted_at?: string
+  // status, resolved_* are server-controlled; never supplied at insert time
 }
 
 // ─── Joined / View Types ─────────────────────────────────────────────────────
@@ -263,6 +308,26 @@ export type Database = {
           }
         ]
       }
+      disputes: {
+        Row: DisputeRow
+        Insert: DisputeInsert
+        // UPDATE is never used directly — resolve_dispute RPC is the only mutation path
+        Update: never
+        Relationships: [
+          {
+            foreignKeyName: "disputes_can_test_id_fkey"
+            columns: ["can_test_id"]
+            referencedRelation: "can_tests"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "disputes_resolved_by_fkey"
+            columns: ["resolved_by"]
+            referencedRelation: "operators"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -273,11 +338,29 @@ export type Database = {
           p_operator_id: string
           p_pin: string
           p_can_test_id: string
-
           p_new_values: Record<string, unknown>
           p_reason: string
         }
         Returns: { id: string }
+      }
+      submit_dispute: {
+        Args: {
+          p_can_test_id: string
+          p_farmer_message: string
+        }
+        /** Returns the new dispute id on success. */
+        Returns: { id: string }
+      }
+      resolve_dispute: {
+        Args: {
+          p_operator_id: string
+          p_pin: string
+          p_dispute_id: string
+          p_resolution_type: DisputeResolutionType
+          p_resolution_reason: string
+        }
+        /** Returns the dispute id and resolution_type on success. */
+        Returns: { id: string; resolution_type: DisputeResolutionType }
       }
     }
     Enums: {

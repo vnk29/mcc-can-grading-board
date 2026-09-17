@@ -140,6 +140,8 @@ export function toAppEntry(entry: CanTestEntry): CanTestAppEntry {
     snfPercent: entry.snfPercent,
     temperatureC: entry.temperatureC,
     adulterationPositive: entry.adulterationPositive,
+    acidityPercent: entry.acidityPercent,
+    sedimentDetected: entry.sedimentDetected,
     autoDecision: entry.autoDecision,
     decision: entry.finalDecision,
     isBorderline: entry.isBorderline,
@@ -149,6 +151,8 @@ export function toAppEntry(entry: CanTestEntry): CanTestAppEntry {
     overrideReason: entry.overrideReason ?? null,
     referenceCode: entry.referenceCode,
     photoUrl: entry.photoUrl ?? null,
+    evidenceType: entry.evidenceType ?? null,
+    sensoryNote: entry.sensoryNote ?? null,
     testPerformedAt: entry.testPerformedAt,
   }
 }

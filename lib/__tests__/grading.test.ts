@@ -54,6 +54,8 @@ const GOOD: CanTestInput = {
   snfPercent: 8.9,
   temperatureC: 6.5,
   adulterationPositive: false,
+  acidityPercent: 0.14,
+  sedimentDetected: false,
 }
 
 // ─── Test Cases ───────────────────────────────────────────────────────────────
@@ -90,13 +92,15 @@ test('5. Clearly rejected — adulteration positive', () => {
   assert('ADULTERATION_DETECTED in reasonCodes', r.reasonCodes.includes('ADULTERATION_DETECTED'))
 })
 
-test('6. Multiple rejection reasons — low fat + high temperature + adulteration', () => {
-  const r = evaluateCanTest({ ...GOOD, fatPercent: 2.1, temperatureC: 15.0, adulterationPositive: true })
+test('6. Multiple rejection reasons — low fat + high temperature + adulteration + acidity + sediment', () => {
+  const r = evaluateCanTest({ ...GOOD, fatPercent: 2.1, temperatureC: 15.0, adulterationPositive: true, acidityPercent: 0.20, sedimentDetected: true })
   assert('decision is rejected', r.decision === 'rejected')
   assert('LOW_FAT present', r.reasonCodes.includes('LOW_FAT'))
   assert('HIGH_TEMPERATURE present', r.reasonCodes.includes('HIGH_TEMPERATURE'))
   assert('ADULTERATION_DETECTED present', r.reasonCodes.includes('ADULTERATION_DETECTED'))
-  assert('3 reason codes total', r.reasonCodes.length === 3)
+  assert('HIGH_ACIDITY present', r.reasonCodes.includes('HIGH_ACIDITY'))
+  assert('SEDIMENT_DETECTED present', r.reasonCodes.includes('SEDIMENT_DETECTED'))
+  assert('5 reason codes total', r.reasonCodes.length === 5)
 })
 
 test('7. Borderline — fat exactly at threshold (3.5%) — accepted but flagged', () => {
@@ -174,6 +178,18 @@ test('14b. Bounds checking for numeric fields', () => {
   assert('temp > 40 is invalid', tempFail.reasonCodes.includes('INVALID_TEMPERATURE_RANGE'))
 })
 
+test('14c. Rejected — high acidity', () => {
+  const r = evaluateCanTest({ ...GOOD, acidityPercent: 0.17 })
+  assert('decision is rejected', r.decision === 'rejected')
+  assert('HIGH_ACIDITY in reasonCodes', r.reasonCodes.includes('HIGH_ACIDITY'))
+})
+
+test('14d. Rejected — sediment detected', () => {
+  const r = evaluateCanTest({ ...GOOD, sedimentDetected: true })
+  assert('decision is rejected', r.decision === 'rejected')
+  assert('SEDIMENT_DETECTED in reasonCodes', r.reasonCodes.includes('SEDIMENT_DETECTED'))
+})
+
 test('15. Null input object → all INVALID codes', () => {
   const r = evaluateCanTest(null)
   assert('INVALID_VOLUME present', r.reasonCodes.includes('INVALID_VOLUME'))
@@ -181,6 +197,8 @@ test('15. Null input object → all INVALID codes', () => {
   assert('INVALID_SNF_PERCENT present', r.reasonCodes.includes('INVALID_SNF_PERCENT'))
   assert('INVALID_TEMPERATURE present', r.reasonCodes.includes('INVALID_TEMPERATURE'))
   assert('INVALID_ADULTERATION_RESULT present', r.reasonCodes.includes('INVALID_ADULTERATION_RESULT'))
+  assert('INVALID_ACIDITY present', r.reasonCodes.includes('INVALID_ACIDITY'))
+  assert('INVALID_SEDIMENT_RESULT present', r.reasonCodes.includes('INVALID_SEDIMENT_RESULT'))
   assert('hasInvalidReadings is true', r.hasInvalidReadings)
   assert('decision is rejected', r.decision === 'rejected')
 })
@@ -195,6 +213,8 @@ test('16. mapToDbInsert() produces correct snake_case shape', () => {
     snfPercent: 8.9,
     temperatureC: 6.5,
     adulterationPositive: false,
+    acidityPercent: 0.14,
+    sedimentDetected: false,
     autoDecision: 'accepted',
     decision: 'accepted',
     isBorderline: false,
@@ -204,6 +224,8 @@ test('16. mapToDbInsert() produces correct snake_case shape', () => {
     overrideReason: null,
     referenceCode: 'MCC-TEST-0001',
     photoUrl: null,
+    evidenceType: null,
+    sensoryNote: null,
     testPerformedAt: '2026-09-15T06:15:00+05:30',
   }
   const db = mapToDbInsert(appEntry)
@@ -211,6 +233,7 @@ test('16. mapToDbInsert() produces correct snake_case shape', () => {
   assert('fat_percent maps from fatPercent', db.fat_percent === 4.2)
   assert('farmer_id maps from farmerId', db.farmer_id === 'farmer-uuid')
   assert('operator_id maps from operatorId', db.operator_id === 'operator-uuid')
+  assert('evidence_type maps from evidenceType', db.evidence_type === null)
   assert('test_performed_at maps from testPerformedAt', db.test_performed_at === '2026-09-15T06:15:00+05:30')
   assert('created_at is absent (let DB stamp it)', !('created_at' in db) || db.created_at === undefined)
 })
@@ -316,7 +339,9 @@ test('28. Empty object input → all INVALID codes', () => {
   assert('INVALID_SNF_PERCENT present', r.reasonCodes.includes('INVALID_SNF_PERCENT'))
   assert('INVALID_TEMPERATURE present', r.reasonCodes.includes('INVALID_TEMPERATURE'))
   assert('INVALID_ADULTERATION_RESULT present', r.reasonCodes.includes('INVALID_ADULTERATION_RESULT'))
-  assert('5 invalid codes total', r.reasonCodes.length === 5)
+  assert('INVALID_ACIDITY present', r.reasonCodes.includes('INVALID_ACIDITY'))
+  assert('INVALID_SEDIMENT_RESULT present', r.reasonCodes.includes('INVALID_SEDIMENT_RESULT'))
+  assert('7 invalid codes total', r.reasonCodes.length === 7)
 })
 
 test('29. Adulteration false (explicit) is valid and accepted', () => {
@@ -347,6 +372,8 @@ test('32. mapToDbInsert omits created_at (server stamps it)', () => {
     snfPercent: 8.9,
     temperatureC: 6.5,
     adulterationPositive: false,
+    acidityPercent: 0.14,
+    sedimentDetected: false,
     autoDecision: 'accepted',
     decision: 'accepted',
     isBorderline: false,
@@ -356,6 +383,8 @@ test('32. mapToDbInsert omits created_at (server stamps it)', () => {
     overrideReason: null,
     referenceCode: 'MCC-TEST-0032',
     photoUrl: null,
+    evidenceType: null,
+    sensoryNote: null,
     testPerformedAt: '2026-09-15T06:15:00+05:30',
   }
   const db = mapToDbInsert(appEntry)

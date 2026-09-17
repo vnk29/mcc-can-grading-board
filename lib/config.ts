@@ -21,6 +21,9 @@ export const MIN_SNF_PERCENT = 8.5
  */
 export const MAX_TEMPERATURE_C = 10
 
+/** Maximum acceptable titratable acidity (percent lactic acid). */
+export const MAX_ACIDITY_PERCENT = 0.16
+
 /**
  * Borderline detection deltas (same units as their corresponding threshold).
  *
@@ -34,3 +37,4 @@ export const MAX_TEMPERATURE_C = 10
 export const FAT_BORDERLINE_DELTA = 0.1      // percent
 export const SNF_BORDERLINE_DELTA = 0.1      // percent
 export const TEMPERATURE_BORDERLINE_DELTA = 0.5  // °C
+export const ACIDITY_BORDERLINE_DELTA = 0.01 // percent

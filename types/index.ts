@@ -31,6 +31,8 @@ export interface TestValues {
    */
   temperatureC: number
   adulterationPositive: boolean
+  acidityPercent?: number
+  sedimentDetected?: boolean
 }
 
 // ─── Grading Thresholds ───────────────────────────────────────────────────────
@@ -80,6 +82,8 @@ export interface CanTestEntry {
   /** Temperature in CELSIUS. */
   temperatureC: number
   adulterationPositive: boolean
+  acidityPercent?: number
+  sedimentDetected?: boolean
 
   /** Auto-graded decision before any operator override. */
   autoDecision: 'accepted' | 'rejected'
@@ -99,6 +103,9 @@ export interface CanTestEntry {
 
   /** Optional photo evidence (URL or base64 data URL). */
   photoUrl?: string
+  
+  evidenceType?: 'photo' | 'sensory' | null
+  sensoryNote?: string | null
 
   /** ISO string: when the physical test was performed on the device. */
   testPerformedAt: string

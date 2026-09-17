@@ -31,7 +31,9 @@
  */
 
 import {
+  ACIDITY_BORDERLINE_DELTA,
   FAT_BORDERLINE_DELTA,
+  MAX_ACIDITY_PERCENT,
   MAX_TEMPERATURE_C,
   MIN_FAT_PERCENT,
   MIN_SNF_PERCENT,
@@ -65,6 +67,10 @@ export interface CanTestInput {
   temperatureC?: number | null
   /** True when the adulteration test strip returns a positive result. */
   adulterationPositive?: boolean | null
+  /** Acidity content (percent). Must be finite and non-negative. */
+  acidityPercent?: number | null
+  /** True when the sediment test returns a positive result. */
+  sedimentDetected?: boolean | null
 }
 
 // ─── Result Types ─────────────────────────────────────────────────────────────
@@ -87,6 +93,8 @@ export type InvalidReadingReasonCode =
   | 'INVALID_TEMPERATURE'
   | 'INVALID_TEMPERATURE_RANGE'
   | 'INVALID_ADULTERATION_RESULT'
+  | 'INVALID_ACIDITY'
+  | 'INVALID_SEDIMENT_RESULT'
 
 /** All reason codes the grading engine can return. */
 export type GradingReasonCode = DbReasonCode | InvalidReadingReasonCode
@@ -126,6 +134,8 @@ export const REASON_LABELS: Record<GradingReasonCode, string> = {
   LOW_SNF: 'Low SNF percentage',
   HIGH_TEMPERATURE: 'Temperature above limit',
   ADULTERATION_DETECTED: 'Adulteration detected',
+  HIGH_ACIDITY: 'High acidity detected',
+  SEDIMENT_DETECTED: 'Sediment detected',
   OPERATOR_OVERRIDE: 'Operator override',
   
   // Invalid Input Codes
@@ -136,7 +146,9 @@ export const REASON_LABELS: Record<GradingReasonCode, string> = {
   INVALID_SNF_PERCENT_RANGE: 'SNF % must be between 4 and 15',
   INVALID_TEMPERATURE: 'Temperature must be a number',
   INVALID_TEMPERATURE_RANGE: 'Temperature must be between 0°C and 40°C',
-  INVALID_ADULTERATION_RESULT: 'Adulteration result is required'
+  INVALID_ADULTERATION_RESULT: 'Adulteration result is required',
+  INVALID_ACIDITY: 'Acidity % must be a number',
+  INVALID_SEDIMENT_RESULT: 'Sediment result is required'
 }
 
 // ─── Precision-Safe Numeric Helpers ──────────────────────────────────────────
@@ -274,6 +286,28 @@ export function evaluateCanTest(
     reasonCodes.push('ADULTERATION_DETECTED')
   }
 
+  // ── Acidity ────────────────────────────────────────────────────────────────
+  const acidityPercent = values?.acidityPercent
+  if (!isValidReading(acidityPercent)) {
+    reasonCodes.push('INVALID_ACIDITY')
+  } else {
+    if (acidityPercent > MAX_ACIDITY_PERCENT) {
+      reasonCodes.push('HIGH_ACIDITY')
+    }
+    if (isNearThreshold(acidityPercent, MAX_ACIDITY_PERCENT, ACIDITY_BORDERLINE_DELTA)) {
+      isBorderline = true
+      borderlineFlags.push('HIGH_ACIDITY')
+    }
+  }
+
+  // ── Sediment ───────────────────────────────────────────────────────────────
+  const sedimentDetected = values?.sedimentDetected
+  if (typeof sedimentDetected !== 'boolean') {
+    reasonCodes.push('INVALID_SEDIMENT_RESULT')
+  } else if (sedimentDetected) {
+    reasonCodes.push('SEDIMENT_DETECTED')
+  }
+
   const hasInvalidReadings = reasonCodes.some((c) => c.startsWith('INVALID_'))
 
   return {
@@ -305,6 +339,8 @@ export interface CanTestAppEntry {
   /** Temperature in CELSIUS. Named with C suffix for clarity. */
   temperatureC: number
   adulterationPositive: boolean
+  acidityPercent?: number
+  sedimentDetected?: boolean
   /** Automatic decision before any operator override. */
   autoDecision: CanDecision
   decision: CanDecision
@@ -318,6 +354,8 @@ export interface CanTestAppEntry {
   overrideReason: string | null
   referenceCode: string
   photoUrl: string | null
+  evidenceType: 'photo' | 'sensory' | null
+  sensoryNote: string | null
   /** ISO string: when the physical test was performed on the device. */
   testPerformedAt: string
 }
@@ -351,6 +389,8 @@ export function mapToDbInsert(entry: CanTestAppEntry): CanTestInsert {
     override_reason: entry.overrideReason,
     reference_code: entry.referenceCode,
     photo_url: entry.photoUrl,
+    evidence_type: entry.evidenceType,
+    sensory_note: entry.sensoryNote,
     test_performed_at: entry.testPerformedAt,
     // created_at is omitted — the database DEFAULT now() stamps it on arrival.
   }

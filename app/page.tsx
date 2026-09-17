@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { v4 as uuidv4 } from 'uuid'
-import { CheckCircle2, AlertTriangle, XCircle, Search, Check, AlertCircle, Loader2, ClipboardList, Plus } from 'lucide-react'
+import { CheckCircle2, AlertTriangle, XCircle, Search, Check, AlertCircle, Loader2, ClipboardList, Plus, Camera, FileText } from 'lucide-react'
 
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
 import { enqueueEntry } from '@/lib/offlineQueue'
@@ -52,9 +52,16 @@ export default function IntakePage() {
   const [snfPercent, setSnfPercent] = useState<string>('')
   const [temperatureC, setTemperatureC] = useState<string>('')
   const [adulterationResult, setAdulterationResult] = useState<'pass' | 'fail' | null>(null)
+  const [acidityPercent, setAcidityPercent] = useState<string>('')
+  const [sedimentResult, setSedimentResult] = useState<'pass' | 'fail' | null>(null)
 
   const [isOverride, setIsOverride] = useState(false)
   const [overrideReason, setOverrideReason] = useState('')
+
+  const [evidenceType, setEvidenceType] = useState<'photo' | 'sensory' | null>(null)
+  const [sensoryNote, setSensoryNote] = useState('')
+  const [photoDataUrl, setPhotoDataUrl] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
@@ -159,14 +166,17 @@ export default function IntakePage() {
     const s = parseFloat(snfPercent)
     const t = parseFloat(temperatureC)
     const v = parseFloat(canVolume)
+    const a = parseFloat(acidityPercent)
     return {
       canVolume: isNaN(v) ? null : v,
       fatPercent: isNaN(f) ? null : f,
       snfPercent: isNaN(s) ? null : s,
       temperatureC: isNaN(t) ? null : t,
       adulterationPositive: adulterationResult === null ? null : adulterationResult === 'fail',
+      acidityPercent: isNaN(a) ? null : a,
+      sedimentDetected: sedimentResult === null ? null : sedimentResult === 'fail',
     }
-  }, [fatPercent, snfPercent, temperatureC, adulterationResult, canVolume])
+  }, [fatPercent, snfPercent, temperatureC, adulterationResult, canVolume, acidityPercent, sedimentResult])
 
   const evaluation = useMemo(() => evaluateCanTest(gradingInput), [gradingInput])
 
@@ -176,9 +186,21 @@ export default function IntakePage() {
     !evaluation.hasInvalidReadings
   )
 
+  const finalDecision: CanDecision = isOverride
+    ? (evaluation.decision === 'accepted' ? 'rejected' : 'accepted')
+    : evaluation.decision
+
+  const requiresEvidence = finalDecision === 'rejected'
+
+  const hasValidEvidence = !requiresEvidence || (
+    (evidenceType === 'sensory' && sensoryNote.trim().length > 0) ||
+    (evidenceType === 'photo' && photoDataUrl !== null)
+  )
+
   const isValidSubmit = Boolean(
     hasValidReadings &&
-    (!isOverride || overrideReason.trim().length > 0)
+    (!isOverride || overrideReason.trim().length > 0) &&
+    hasValidEvidence
   )
 
   // Generate stable stamps right as the readings become valid (simulating when physical test actually completes)
@@ -189,10 +211,6 @@ export default function IntakePage() {
       setStableAudit({ refCode, testPerformedAt: now.toISOString() })
     }
   }, [hasValidReadings, stableAudit])
-
-  const finalDecision: CanDecision = isOverride
-    ? (evaluation.decision === 'accepted' ? 'rejected' : 'accepted')
-    : evaluation.decision
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -224,6 +242,8 @@ export default function IntakePage() {
       snfPercent: parseFloat(snfPercent),
       temperatureC: parseFloat(temperatureC),
       adulterationPositive: adulterationResult === 'fail',
+      acidityPercent: parseFloat(acidityPercent),
+      sedimentDetected: sedimentResult === 'fail',
       autoDecision: evaluation.decision,
       decision: finalDecision,
       isBorderline: evaluation.isBorderline,
@@ -232,7 +252,9 @@ export default function IntakePage() {
       isOverride,
       overrideReason: isOverride ? overrideReason.trim() : null,
       referenceCode: stableAudit.refCode,
-      photoUrl: null,
+      photoUrl: requiresEvidence && evidenceType === 'photo' ? photoDataUrl : null,
+      evidenceType: requiresEvidence ? evidenceType : null,
+      sensoryNote: requiresEvidence && evidenceType === 'sensory' ? sensoryNote.trim() : null,
       testPerformedAt: stableAudit.testPerformedAt
     }
 
@@ -248,6 +270,8 @@ export default function IntakePage() {
       snfPercent: parseFloat(snfPercent),
       temperatureC: parseFloat(temperatureC),
       adulterationPositive: adulterationResult === 'fail',
+      acidityPercent: parseFloat(acidityPercent),
+      sedimentDetected: sedimentResult === 'fail',
       reasonCodes: finalReasonCodes,
       autoDecision: evaluation.decision,
       finalDecision,
@@ -256,6 +280,9 @@ export default function IntakePage() {
       isOverride,
       overrideReason: isOverride ? overrideReason.trim() : undefined,
       referenceCode: stableAudit.refCode,
+      photoUrl: requiresEvidence && evidenceType === 'photo' ? (photoDataUrl || undefined) : undefined,
+      evidenceType: requiresEvidence && evidenceType ? evidenceType : undefined,
+      sensoryNote: requiresEvidence && evidenceType === 'sensory' ? sensoryNote.trim() : undefined,
       testPerformedAt: stableAudit.testPerformedAt,
       syncStatus: 'pending',
       queuedAt: new Date().toISOString(),
@@ -335,6 +362,17 @@ export default function IntakePage() {
     const q = searchQuery.toLowerCase()
     return farmers.filter(f => f.name.toLowerCase().includes(q) || f.id.includes(searchQuery))
   }, [farmers, searchQuery])
+
+  const handlePhotoCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        setPhotoDataUrl(reader.result as string)
+      }
+      reader.readAsDataURL(file)
+    }
+  }
 
   if (isLoadingData) {
     return (
@@ -567,57 +605,111 @@ export default function IntakePage() {
               </div>
             </div>
 
-            <div className="space-y-1.5 relative mb-5">
-              <Label className="text-[13px] font-bold text-slate-900">Temperature</Label>
-              <div className="relative">
-                <Input 
-                  type="number" 
-                  step="0.1" 
-                  min="0"
-                  max="50"
-                  placeholder="0.0" 
-                  className="h-14 bg-slate-50 border-slate-200 text-[20px] font-bold text-center pr-8 text-slate-700"
-                  value={temperatureC}
-                  onChange={(e) => setTemperatureC(e.target.value)}
-                />
-                <span className="absolute right-4 top-[14px] text-[16px] font-bold text-slate-800">&deg;C</span>
+            <div className="flex gap-4 mb-5">
+              <div className="flex-1 space-y-1.5 relative">
+                <Label className="text-[13px] font-bold text-slate-900">Temperature</Label>
+                <div className="relative">
+                  <Input 
+                    type="number" 
+                    step="0.1" 
+                    min="0"
+                    max="50"
+                    placeholder="0.0" 
+                    className="h-14 bg-slate-50 border-slate-200 text-[20px] font-bold text-center pr-8 text-slate-700"
+                    value={temperatureC}
+                    onChange={(e) => setTemperatureC(e.target.value)}
+                  />
+                  <span className="absolute right-4 top-[14px] text-[16px] font-bold text-slate-800">&deg;C</span>
+                </div>
+              </div>
+              <div className="flex-1 space-y-1.5 relative">
+                <Label className="text-[13px] font-bold text-slate-900">Acidity</Label>
+                <div className="relative">
+                  <Input 
+                    type="number" 
+                    step="0.01" 
+                    min="0"
+                    max="5"
+                    placeholder="0.00" 
+                    className="h-14 bg-slate-50 border-slate-200 text-[20px] font-bold text-center pr-8 text-slate-700"
+                    value={acidityPercent}
+                    onChange={(e) => setAcidityPercent(e.target.value)}
+                  />
+                  <span className="absolute right-4 top-[14px] text-[16px] font-bold text-slate-800">%</span>
+                </div>
               </div>
             </div>
 
             <div className="space-y-2 mt-4 pt-4 border-t border-slate-100">
-              <Label className="text-[14px] font-bold text-slate-900 block mb-2">Adulteration strip</Label>
-              <div className="flex gap-3">
-                <button
-                  type="button"
-                  className={cn(
-                    "flex-1 h-14 rounded-xl border flex items-center justify-center text-[16px] font-bold transition-colors gap-2",
-                    adulterationResult === 'pass' 
-                      ? "bg-white border-slate-800 text-slate-900 shadow-sm" 
-                      : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50"
-                  )}
-                  onClick={() => setAdulterationResult('pass')}
-                >
-                  {adulterationResult === 'pass' && <Check className="w-5 h-5" />}
-                  PASS
-                </button>
-                <button
-                  type="button"
-                  className={cn(
-                    "flex-1 h-14 rounded-xl border flex items-center justify-center text-[16px] font-bold transition-colors gap-2",
-                    adulterationResult === 'fail' 
-                      ? "bg-white border-slate-800 text-slate-900 shadow-sm" 
-                      : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50"
-                  )}
-                  onClick={() => setAdulterationResult('fail')}
-                >
-                  {adulterationResult === 'fail' && <XCircle className="w-5 h-5" />}
-                  FAIL
-                </button>
+              <div className="flex gap-4">
+                <div className="flex-1 space-y-2">
+                  <Label className="text-[14px] font-bold text-slate-900 block mb-2">Adulteration</Label>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      className={cn(
+                        "flex-1 h-12 rounded-lg border flex items-center justify-center text-[15px] font-bold transition-colors",
+                        adulterationResult === 'pass' 
+                          ? "bg-white border-slate-800 text-slate-900 shadow-sm" 
+                          : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50"
+                      )}
+                      onClick={() => setAdulterationResult('pass')}
+                    >
+                      {adulterationResult === 'pass' && <Check className="w-4 h-4 mr-1" />}
+                      PASS
+                    </button>
+                    <button
+                      type="button"
+                      className={cn(
+                        "flex-1 h-12 rounded-lg border flex items-center justify-center text-[15px] font-bold transition-colors",
+                        adulterationResult === 'fail' 
+                          ? "bg-white border-slate-800 text-slate-900 shadow-sm" 
+                          : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50"
+                      )}
+                      onClick={() => setAdulterationResult('fail')}
+                    >
+                      {adulterationResult === 'fail' && <XCircle className="w-4 h-4 mr-1" />}
+                      FAIL
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex-1 space-y-2">
+                  <Label className="text-[14px] font-bold text-slate-900 block mb-2">Sediment</Label>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      className={cn(
+                        "flex-1 h-12 rounded-lg border flex items-center justify-center text-[15px] font-bold transition-colors",
+                        sedimentResult === 'pass' 
+                          ? "bg-white border-slate-800 text-slate-900 shadow-sm" 
+                          : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50"
+                      )}
+                      onClick={() => setSedimentResult('pass')}
+                    >
+                      {sedimentResult === 'pass' && <Check className="w-4 h-4 mr-1" />}
+                      PASS
+                    </button>
+                    <button
+                      type="button"
+                      className={cn(
+                        "flex-1 h-12 rounded-lg border flex items-center justify-center text-[15px] font-bold transition-colors",
+                        sedimentResult === 'fail' 
+                          ? "bg-white border-slate-800 text-slate-900 shadow-sm" 
+                          : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50"
+                      )}
+                      onClick={() => setSedimentResult('fail')}
+                    >
+                      {sedimentResult === 'fail' && <XCircle className="w-4 h-4 mr-1" />}
+                      FAIL
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Override Toggle (Preserving functionality) */}
+          {/* Override Toggle */}
           {hasValidReadings && (
             <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm space-y-3">
                <div className="flex items-center justify-between">
@@ -642,6 +734,100 @@ export default function IntakePage() {
                    />
                  </div>
                )}
+            </div>
+          )}
+
+          {/* Rejection Evidence Box */}
+          {hasValidReadings && requiresEvidence && (
+            <div className="bg-red-50 border border-red-200 rounded-xl p-4 shadow-sm animate-in fade-in slide-in-from-bottom-2">
+              <h3 className="text-[16px] font-bold text-red-900 mb-2 flex items-center">
+                <AlertTriangle className="w-5 h-5 mr-2" />
+                Rejection Evidence Required
+              </h3>
+              <p className="text-[13px] text-red-700 mb-4">
+                You must provide a note or a photo to justify rejecting this can.
+              </p>
+
+              <div className="flex gap-3 mb-3">
+                <button
+                  type="button"
+                  onClick={() => setEvidenceType('sensory')}
+                  className={cn(
+                    "flex-1 h-12 rounded-lg border flex items-center justify-center text-[14px] font-bold transition-colors",
+                    evidenceType === 'sensory'
+                      ? "bg-white border-red-800 text-red-900 shadow-sm"
+                      : "bg-white border-red-200 text-red-600 hover:bg-red-100"
+                  )}
+                >
+                  <FileText className="w-4 h-4 mr-2" />
+                  Sensory Note
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEvidenceType('photo')}
+                  className={cn(
+                    "flex-1 h-12 rounded-lg border flex items-center justify-center text-[14px] font-bold transition-colors",
+                    evidenceType === 'photo'
+                      ? "bg-white border-red-800 text-red-900 shadow-sm"
+                      : "bg-white border-red-200 text-red-600 hover:bg-red-100"
+                  )}
+                >
+                  <Camera className="w-4 h-4 mr-2" />
+                  Photo
+                </button>
+              </div>
+
+              {evidenceType === 'sensory' && (
+                <Textarea
+                  value={sensoryNote}
+                  onChange={(e) => setSensoryNote(e.target.value)}
+                  placeholder="Describe smell, color, taste, etc."
+                  className="bg-white border-red-200 text-[15px] focus-visible:ring-red-500"
+                  rows={2}
+                  maxLength={500}
+                />
+              )}
+
+              {evidenceType === 'photo' && (
+                <div className="space-y-3">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    className="hidden"
+                    ref={fileInputRef}
+                    onChange={handlePhotoCapture}
+                  />
+                  {!photoDataUrl ? (
+                    <Button 
+                      type="button" 
+                      variant="outline"
+                      className="w-full h-12 border-red-200 text-red-700 hover:bg-red-100 hover:text-red-900"
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      <Camera className="w-4 h-4 mr-2" />
+                      Take / Choose Photo
+                    </Button>
+                  ) : (
+                    <div className="relative">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={photoDataUrl} alt="Evidence" className="w-full max-h-48 object-cover rounded-lg border border-red-200" />
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="sm"
+                        className="absolute top-2 right-2"
+                        onClick={() => {
+                          setPhotoDataUrl(null)
+                          if (fileInputRef.current) fileInputRef.current.value = ''
+                        }}
+                      >
+                        Retake
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 

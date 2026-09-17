@@ -48,6 +48,8 @@ function makeEntry(overrides: Partial<CanTestEntry> = {}): CanTestEntry {
     snfPercent: 8.9,
     temperatureC: 6.5,
     adulterationPositive: false,
+    acidityPercent: 0.14,
+    sedimentDetected: false,
     autoDecision: 'accepted',
     reasonCodes: [],
     isBorderline: false,
@@ -58,6 +60,9 @@ function makeEntry(overrides: Partial<CanTestEntry> = {}): CanTestEntry {
     testPerformedAt: '2026-09-16T06:15:00+05:30',
     syncStatus: 'pending',
     queuedAt: '2026-09-16T06:15:01+05:30',
+    evidenceType: null,
+    sensoryNote: null,
+    photoUrl: null,
     ...overrides,
   }
 }
@@ -123,6 +128,8 @@ test('10. toAppEntry maps all fields correctly', () => {
   assert('snfPercent preserved', app.snfPercent === 8.9)
   assert('temperatureC preserved', app.temperatureC === 6.5)
   assert('adulterationPositive preserved', app.adulterationPositive === false)
+  assert('acidityPercent preserved', app.acidityPercent === 0.14)
+  assert('sedimentDetected preserved', app.sedimentDetected === false)
   assert('autoDecision preserved', app.autoDecision === 'accepted')
   assert('decision maps from finalDecision', app.decision === 'accepted')
   assert('isBorderline preserved', app.isBorderline === false)
@@ -130,6 +137,8 @@ test('10. toAppEntry maps all fields correctly', () => {
   assert('reasonCodes preserved', Array.isArray(app.reasonCodes) && app.reasonCodes.length === 0)
   assert('isOverride preserved', app.isOverride === false)
   assert('referenceCode preserved', app.referenceCode === 'MCC-20260916-AB12')
+  assert('evidenceType maps to null', app.evidenceType === null)
+  assert('sensoryNote maps to null', app.sensoryNote === null)
   assert('testPerformedAt preserved', app.testPerformedAt === '2026-09-16T06:15:01+05:30' || app.testPerformedAt === '2026-09-16T06:15:00+05:30')
 })
 
